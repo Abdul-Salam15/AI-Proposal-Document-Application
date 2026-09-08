@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+:root {
+  /* "Ledger" palette — see implementation.md Section 14 */
+  --color-ink: #1b2430;
+  --color-paper: #efebe1;
+  --color-brass: #a67c3a;
+  --color-oxblood: #7a2e2e;
+  --color-slate: #5b7b96;
+  --color-rule: #d6d0c0;
+  --color-draft: #8b8879;
+
+  --background: var(--color-paper);
+  --foreground: var(--color-ink);
+}
+
+@theme inline {
+  --color-ink: var(--color-ink);
+  --color-paper: var(--color-paper);
+  --color-brass: var(--color-brass);
+  --color-oxblood: var(--color-oxblood);
+  --color-slate: var(--color-slate);
+  --color-rule: var(--color-rule);
+  --color-draft: var(--color-draft);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --font-sans: var(--font-public-sans);
+  --font-serif: var(--font-source-serif-4);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  font-weight: 400;
+}
