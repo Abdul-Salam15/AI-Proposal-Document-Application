@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { SECTIONS, type SectionConfig, type SectionKey } from "@/lib/generation/sections";
-import type { Proposal } from "@/lib/types";
+import type { Proposal, ProposalStatus } from "@/lib/types";
 
 // Section 5's note: recommended_approach and deliverables are AI-derived,
 // not direct intake fields — flagged so the salesperson double-checks them.
@@ -11,10 +11,13 @@ const AI_INFERRED_SECTIONS: SectionKey[] = ["recommended_approach", "deliverable
 export default function ProposalReview({
   proposal,
   canEdit,
+  canApprove,
 }: {
   proposal: Proposal;
   canEdit: boolean;
+  canApprove: boolean;
 }) {
+  const [status, setStatus] = useState<ProposalStatus>(proposal.status);
   const [content, setContent] = useState<Record<string, string>>(
     (proposal.content as Record<string, string>) ?? {}
   );
@@ -23,19 +26,156 @@ export default function ProposalReview({
     setContent((prev) => ({ ...prev, [key]: value }));
   }
 
+  // Section 13: locked from further edits once no longer draft.
+  const editable = canEdit && status === "draft";
+
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-10 border border-rule bg-paper p-10 font-serif text-ink">
-      {SECTIONS.map((section) => (
-        <SectionBlock
-          key={section.key}
+    <div className="mx-auto flex max-w-2xl flex-col gap-6">
+      {editable && <SubmitBar proposalId={proposal.id} onSubmitted={() => setStatus("pending_approval")} />}
+
+      {canApprove && status === "pending_approval" && (
+        <ApprovalBar
           proposalId={proposal.id}
-          section={section}
-          content={content[section.key] ?? ""}
-          hasContent={content[section.key] !== undefined}
-          canEdit={canEdit}
-          onUpdate={(value) => handleSectionUpdate(section.key, value)}
+          onDecided={(decision) => setStatus(decision)}
         />
-      ))}
+      )}
+
+      <div className="flex flex-col gap-10 border border-rule bg-paper p-10 font-serif text-ink">
+        {SECTIONS.map((section) => (
+          <SectionBlock
+            key={section.key}
+            proposalId={proposal.id}
+            section={section}
+            content={content[section.key] ?? ""}
+            hasContent={content[section.key] !== undefined}
+            editable={editable}
+            onUpdate={(value) => handleSectionUpdate(section.key, value)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SubmitBar({
+  proposalId,
+  onSubmitted,
+}: {
+  proposalId: string;
+  onSubmitted: () => void;
+}) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit() {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/proposals/${proposalId}/submit`, { method: "POST" });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error ?? "Submission failed.");
+        return;
+      }
+
+      onSubmitted();
+    } catch {
+      setError("Unable to reach the server.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-start gap-2 border border-rule bg-paper-shade p-4 font-sans text-sm">
+      <p className="text-ink/70">
+        Once submitted, this proposal is locked from further edits until an approver decides.
+      </p>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={isSubmitting}
+          className="bg-ink px-3 py-1.5 text-paper disabled:opacity-50"
+        >
+          {isSubmitting ? "Submitting…" : "Submit for approval"}
+        </button>
+        {error && <p className="text-oxblood">{error}</p>}
+      </div>
+    </div>
+  );
+}
+
+function ApprovalBar({
+  proposalId,
+  onDecided,
+}: {
+  proposalId: string;
+  onDecided: (decision: "approved" | "rejected") => void;
+}) {
+  const [comment, setComment] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleDecide(decision: "approved" | "rejected") {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/proposals/${proposalId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, comment }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error ?? "Recording the decision failed.");
+        return;
+      }
+
+      onDecided(decision);
+    } catch {
+      setError("Unable to reach the server.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 border border-rule bg-paper-shade p-4 font-sans text-sm">
+      <label className="flex flex-col gap-1">
+        Comment
+        <textarea
+          value={comment}
+          onChange={(event) => setComment(event.target.value)}
+          rows={2}
+          className="w-full border border-rule bg-paper p-2 text-sm text-ink outline-none focus:border-slate"
+        />
+      </label>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => handleDecide("approved")}
+          disabled={isSubmitting}
+          className="border border-brass px-3 py-1.5 text-brass disabled:opacity-50"
+        >
+          {isSubmitting ? "Working…" : "Approve"}
+        </button>
+        <button
+          type="button"
+          onClick={() => handleDecide("rejected")}
+          disabled={isSubmitting}
+          className="border border-oxblood px-3 py-1.5 text-oxblood disabled:opacity-50"
+        >
+          {isSubmitting ? "Working…" : "Reject"}
+        </button>
+        {error && <p className="text-oxblood">{error}</p>}
+      </div>
     </div>
   );
 }
@@ -51,14 +191,14 @@ function SectionBlock({
   section,
   content,
   hasContent,
-  canEdit,
+  editable,
   onUpdate,
 }: {
   proposalId: string;
   section: SectionConfig;
   content: string;
   hasContent: boolean;
-  canEdit: boolean;
+  editable: boolean;
   onUpdate: (value: string) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -179,7 +319,7 @@ function SectionBlock({
 
       {error && <p className="mt-2 font-sans text-sm text-oxblood">{error}</p>}
 
-      {canEdit && (
+      {editable && (
         <div className="mt-3 flex gap-2 font-sans text-sm">
           {isEditing ? (
             <>
