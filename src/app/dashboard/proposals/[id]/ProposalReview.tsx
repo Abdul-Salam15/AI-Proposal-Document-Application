@@ -18,6 +18,8 @@ export default function ProposalReview({
   canApprove: boolean;
 }) {
   const [status, setStatus] = useState<ProposalStatus>(proposal.status);
+  const [proposalLink, setProposalLink] = useState<string | null>(proposal.proposal_link);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(proposal.pdf_url);
   const [content, setContent] = useState<Record<string, string>>(
     (proposal.content as Record<string, string>) ?? {}
   );
@@ -28,6 +30,10 @@ export default function ProposalReview({
 
   // Section 13: locked from further edits once no longer draft.
   const editable = canEdit && status === "draft";
+  // Section 12: export/send are open to salesperson, approver, or admin —
+  // if this page rendered at all, RLS already confirmed the viewer is the
+  // owner, an approver, or an admin (Section 12's three allowed roles).
+  const canDeliver = status === "approved" || status === "sent" || status === "failed";
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
@@ -37,6 +43,23 @@ export default function ProposalReview({
         <ApprovalBar
           proposalId={proposal.id}
           onDecided={(decision) => setStatus(decision)}
+        />
+      )}
+
+      {canDeliver && (
+        <DeliveryBar
+          proposalId={proposal.id}
+          status={status}
+          proposalLink={proposalLink}
+          pdfUrl={pdfUrl}
+          onExported={(link, pdf) => {
+            setProposalLink(link);
+            setPdfUrl(pdf);
+            setStatus("approved");
+          }}
+          onExportFailed={() => setStatus("failed")}
+          onSent={() => setStatus("sent")}
+          onSendFailed={() => setStatus("failed")}
         />
       )}
 
@@ -176,6 +199,138 @@ function ApprovalBar({
         </button>
         {error && <p className="text-oxblood">{error}</p>}
       </div>
+    </div>
+  );
+}
+
+function DeliveryBar({
+  proposalId,
+  status,
+  proposalLink,
+  pdfUrl,
+  onExported,
+  onExportFailed,
+  onSent,
+  onSendFailed,
+}: {
+  proposalId: string;
+  status: ProposalStatus;
+  proposalLink: string | null;
+  pdfUrl: string | null;
+  onExported: (proposalLink: string, pdfUrl: string) => void;
+  onExportFailed: () => void;
+  onSent: () => void;
+  onSendFailed: () => void;
+}) {
+  const [isExporting, setIsExporting] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [emailPreview, setEmailPreview] = useState<{ subject: string; body: string } | null>(null);
+
+  async function handleExport() {
+    if (isExporting) return;
+    setIsExporting(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/proposals/${proposalId}/export`, { method: "POST" });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error ?? "Export failed.");
+        onExportFailed();
+        return;
+      }
+
+      onExported(data.proposal.proposal_link, data.proposal.pdf_url);
+    } catch {
+      setError("Unable to reach the server.");
+      onExportFailed();
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
+  async function handleSend() {
+    if (isSending) return;
+    setIsSending(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/proposals/${proposalId}/send`, { method: "POST" });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error ?? "Sending failed.");
+        onSendFailed();
+        return;
+      }
+
+      setEmailPreview(data.email);
+      onSent();
+    } catch {
+      setError("Unable to reach the server.");
+      onSendFailed();
+    } finally {
+      setIsSending(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3 border border-rule bg-paper-shade p-4 font-sans text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={isExporting || status === "sent"}
+          className="border border-ink px-3 py-1.5 text-ink disabled:opacity-50"
+        >
+          {isExporting ? "Exporting…" : proposalLink ? "Re-export" : "Export"}
+        </button>
+        <button
+          type="button"
+          onClick={handleSend}
+          disabled={isSending || !proposalLink || status === "sent"}
+          className="bg-ink px-3 py-1.5 text-paper disabled:opacity-50"
+        >
+          {isSending ? "Sending…" : "Send to client"}
+        </button>
+        {status === "failed" && <span className="text-oxblood">A step failed — see below.</span>}
+        {status === "sent" && <span className="text-brass">Sent.</span>}
+      </div>
+
+      {proposalLink && (
+        <p className="text-ink/70">
+          Hosted page:{" "}
+          <a href={proposalLink} target="_blank" rel="noreferrer" className="underline">
+            {proposalLink}
+          </a>
+        </p>
+      )}
+      {pdfUrl && (
+        <p className="text-ink/70">
+          PDF:{" "}
+          <a href={pdfUrl} target="_blank" rel="noreferrer" className="underline">
+            {pdfUrl}
+          </a>
+        </p>
+      )}
+
+      {emailPreview && (
+        <div className="flex flex-col gap-1 border-t border-rule pt-3">
+          <p className="text-ink/70">
+            Client email — copy this if it wasn&apos;t sent automatically (no Resend configured):
+          </p>
+          <p>
+            <strong className="font-medium">Subject:</strong> {emailPreview.subject}
+          </p>
+          <pre className="whitespace-pre-wrap border border-rule bg-paper p-2 font-sans text-sm">
+            {emailPreview.body}
+          </pre>
+        </div>
+      )}
+
+      {error && <p className="text-oxblood">{error}</p>}
     </div>
   );
 }

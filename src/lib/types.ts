@@ -26,6 +26,9 @@ export type Proposal = {
   supporting_material: string | null;
   status: ProposalStatus;
   content: Record<string, unknown>;
+  // Section 2/5 export artifacts — null until export succeeds.
+  proposal_link: string | null;
+  pdf_url: string | null;
   created_at: string;
   updated_at: string;
 };
