@@ -1,10 +1,9 @@
 // Section 11.1: "the trigger button must be disabled — not just visually,
-// but functionally — ignore duplicate clicks." There's no review UI yet
-// (out of scope this stage) to hold that disabled state, so this is the
-// server-side backstop: a second request for the same proposal+section
-// while one is still running is rejected outright rather than queued or
-// re-run. Process-local (a single Next.js server instance) — the primary
-// defense is still the client disabling its own button once that UI exists.
+// but functionally — ignore duplicate clicks." The review UI already
+// disables its own button while a request is in flight (ProposalReview.tsx);
+// this is the server-side backstop behind it: a second request for the same
+// proposal+section while one is still running is rejected outright rather
+// than queued or re-run. Process-local (a single Next.js server instance).
 const inFlight = new Set<string>();
 
 function keyFor(proposalId: string, section: string): string {

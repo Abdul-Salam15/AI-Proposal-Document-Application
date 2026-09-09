@@ -73,13 +73,19 @@ export async function POST(
   });
 
   if (approvalError) {
-    await writeAuditLog({
+    const logged = await writeAuditLog({
       actorId: user.id,
       action: "approval_failed",
       targetId: id,
       metadata: { decision, error: approvalError.message },
     });
-    return NextResponse.json({ error: approvalError.message }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: approvalError.message,
+        ...(logged ? {} : { auditLogWarning: "This failure could not be recorded in the audit log. Contact an admin." }),
+      },
+      { status: 500 }
+    );
   }
 
   // Section 13 gives approvers no direct UPDATE policy on `proposals` — the
@@ -95,21 +101,30 @@ export async function POST(
     .single();
 
   if (updateError) {
-    await writeAuditLog({
+    const logged = await writeAuditLog({
       actorId: user.id,
       action: "approval_failed",
       targetId: id,
       metadata: { decision, error: updateError.message },
     });
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: updateError.message,
+        ...(logged ? {} : { auditLogWarning: "This failure could not be recorded in the audit log. Contact an admin." }),
+      },
+      { status: 500 }
+    );
   }
 
-  await writeAuditLog({
+  const logged = await writeAuditLog({
     actorId: user.id,
     action: decision, // Section 4 example action values: "approved, rejected"
     targetId: id,
     metadata: { comment },
   });
 
-  return NextResponse.json({ proposal: updated });
+  return NextResponse.json({
+    proposal: updated,
+    ...(logged ? {} : { auditLogWarning: "The decision was recorded, but the audit log entry failed to record. Contact an admin." }),
+  });
 }

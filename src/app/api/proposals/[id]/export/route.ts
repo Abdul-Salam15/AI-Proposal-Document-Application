@@ -76,14 +76,17 @@ export async function POST(
       throw new Error(updateError.message);
     }
 
-    await writeAuditLog({
+    const logged = await writeAuditLog({
       actorId: user.id,
       action: "proposal_exported",
       targetId: id,
       metadata: { proposalLink, pdfUrl: publicUrlData.publicUrl },
     });
 
-    return NextResponse.json({ proposal: updated });
+    return NextResponse.json({
+      proposal: updated,
+      ...(logged ? {} : { auditLogWarning: "Export succeeded, but the audit log entry failed to record. Contact an admin." }),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Export failed.";
 
@@ -93,13 +96,19 @@ export async function POST(
       .update({ status: "failed", updated_at: new Date().toISOString() })
       .eq("id", id);
 
-    await writeAuditLog({
+    const logged = await writeAuditLog({
       actorId: user.id,
       action: "export_failed",
       targetId: id,
       metadata: { error: message },
     });
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: message,
+        ...(logged ? {} : { auditLogWarning: "This failure could not be recorded in the audit log. Contact an admin." }),
+      },
+      { status: 500 }
+    );
   }
 }

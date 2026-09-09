@@ -25,8 +25,8 @@ export type IntakeFieldConfig = {
 };
 
 // The 11 "Intake" sources from Section 5's field mapping, plus
-// `supporting_material` from Section 4 (purpose described in Section 9;
-// its AI usage is not built yet — this stage only captures and stores it).
+// `supporting_material` from Section 4 (purpose described in Section 9 —
+// passed to Claude as additional context during live generation).
 export const INTAKE_FIELDS: IntakeFieldConfig[] = [
   { key: "client_name", label: "Client name", type: "text", required: true },
   { key: "client_email", label: "Client email", type: "email", required: true },
@@ -60,6 +60,6 @@ export const INTAKE_FIELDS: IntakeFieldConfig[] = [
     type: "textarea",
     required: false,
     helpText:
-      "Notes, prior proposals, or reference material (Section 9). Not yet used for generation.",
+      "Notes, prior proposals, or reference material (Section 9). Passed to Claude as context during generation.",
   },
 ];

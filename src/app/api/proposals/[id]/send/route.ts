@@ -6,6 +6,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import type { Proposal } from "@/lib/types";
 
+// Section 11.2: "Malformed or missing client_email should be validated
+// before the delivery step is attempted, rather than relying on the email
+// provider to reject it."
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 // POST /api/proposals/[id]/send — Section 12: sends the client email using
 // the client email template; status -> sent or failed. Salesperson,
 // approver, or admin — only after export succeeds (checked via the
@@ -45,6 +50,29 @@ export async function POST(
   }
 
   const service = createServiceClient();
+
+  if (!proposal.client_email || !EMAIL_REGEX.test(proposal.client_email)) {
+    await service
+      .from("proposals")
+      .update({ status: "failed", updated_at: new Date().toISOString() })
+      .eq("id", id);
+
+    const logged = await writeAuditLog({
+      actorId: user.id,
+      action: "email_failed",
+      targetId: id,
+      metadata: { error: "Client email is missing or malformed.", clientEmail: proposal.client_email },
+    });
+
+    return NextResponse.json(
+      {
+        error: "Client email is missing or malformed — fix it before sending.",
+        ...(logged ? {} : { auditLogWarning: "This failure could not be recorded in the audit log. Contact an admin." }),
+      },
+      { status: 400 }
+    );
+  }
+
   const { subject, body } = buildClientEmail(proposal as Proposal);
 
   try {
@@ -86,14 +114,19 @@ export async function POST(
       throw new Error(updateError.message);
     }
 
-    await writeAuditLog({
+    const logged = await writeAuditLog({
       actorId: user.id,
       action: "email_sent",
       targetId: id,
       metadata: { mode, to: proposal.client_email, subject },
     });
 
-    return NextResponse.json({ proposal: updated, mode, email: { subject, body } });
+    return NextResponse.json({
+      proposal: updated,
+      mode,
+      email: { subject, body },
+      ...(logged ? {} : { auditLogWarning: "The email was sent, but the audit log entry failed to record. Contact an admin." }),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Sending the email failed.";
 
@@ -102,13 +135,19 @@ export async function POST(
       .update({ status: "failed", updated_at: new Date().toISOString() })
       .eq("id", id);
 
-    await writeAuditLog({
+    const logged = await writeAuditLog({
       actorId: user.id,
       action: "email_failed",
       targetId: id,
       metadata: { error: message },
     });
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: message,
+        ...(logged ? {} : { auditLogWarning: "This failure could not be recorded in the audit log. Contact an admin." }),
+      },
+      { status: 500 }
+    );
   }
 }

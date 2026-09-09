@@ -9,8 +9,15 @@ import { SECTIONS, type SectionKey } from "./sections";
 // the salesperson to edit manually instead of calling the API again."
 const REGENERATION_CAP = 3;
 
+// Section 11.2: "Placeholder/junk intake values (e.g. 'TBD', 'n/a', '-')
+// should be treated as missing information ... not passed to Claude as if
+// they were real content."
+const JUNK_VALUES = new Set(["tbd", "n/a", "na", "-", "--", "none"]);
+
 function isMissing(value: string | null | undefined): boolean {
-  return !value || !value.trim();
+  if (!value) return true;
+  const normalized = value.trim().toLowerCase();
+  return normalized.length === 0 || JUNK_VALUES.has(normalized);
 }
 
 function buildContextText(proposal: Proposal): string {

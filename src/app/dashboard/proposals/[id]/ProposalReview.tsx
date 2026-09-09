@@ -142,11 +142,13 @@ function ApprovalBar({
   const [comment, setComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [auditWarning, setAuditWarning] = useState<string | null>(null);
 
   async function handleDecide(decision: "approved" | "rejected") {
     if (isSubmitting) return;
     setIsSubmitting(true);
     setError(null);
+    setAuditWarning(null);
 
     try {
       const response = await fetch(`/api/proposals/${proposalId}/approve`, {
@@ -155,6 +157,11 @@ function ApprovalBar({
         body: JSON.stringify({ decision, comment }),
       });
       const data = await response.json();
+
+      // Section 10: a failed audit_log write must surface, not fail silently.
+      if (data.auditLogWarning) {
+        setAuditWarning(data.auditLogWarning);
+      }
 
       if (!response.ok) {
         setError(data.error ?? "Recording the decision failed.");
@@ -199,6 +206,7 @@ function ApprovalBar({
         </button>
         {error && <p className="text-oxblood">{error}</p>}
       </div>
+      {auditWarning && <p className="text-oxblood">{auditWarning}</p>}
     </div>
   );
 }
@@ -225,16 +233,23 @@ function DeliveryBar({
   const [isExporting, setIsExporting] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [auditWarning, setAuditWarning] = useState<string | null>(null);
   const [emailPreview, setEmailPreview] = useState<{ subject: string; body: string } | null>(null);
 
   async function handleExport() {
     if (isExporting) return;
     setIsExporting(true);
     setError(null);
+    setAuditWarning(null);
 
     try {
       const response = await fetch(`/api/proposals/${proposalId}/export`, { method: "POST" });
       const data = await response.json();
+
+      // Section 10: a failed audit_log write must surface, not fail silently.
+      if (data.auditLogWarning) {
+        setAuditWarning(data.auditLogWarning);
+      }
 
       if (!response.ok) {
         setError(data.error ?? "Export failed.");
@@ -255,10 +270,16 @@ function DeliveryBar({
     if (isSending) return;
     setIsSending(true);
     setError(null);
+    setAuditWarning(null);
 
     try {
       const response = await fetch(`/api/proposals/${proposalId}/send`, { method: "POST" });
       const data = await response.json();
+
+      // Section 10: a failed audit_log write must surface, not fail silently.
+      if (data.auditLogWarning) {
+        setAuditWarning(data.auditLogWarning);
+      }
 
       if (!response.ok) {
         setError(data.error ?? "Sending failed.");
@@ -331,6 +352,7 @@ function DeliveryBar({
       )}
 
       {error && <p className="text-oxblood">{error}</p>}
+      {auditWarning && <p className="text-oxblood">{auditWarning}</p>}
     </div>
   );
 }

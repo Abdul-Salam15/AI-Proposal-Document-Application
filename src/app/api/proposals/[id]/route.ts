@@ -93,10 +93,9 @@ export async function PATCH(
     return NextResponse.json({ error: "You do not own this proposal." }, { status: 403 });
   }
 
-  // Section 11.2: locked from further edits once submitted. Submission
-  // isn't built yet, so every proposal is currently `draft`, but this keeps
-  // the check honest for when it is — RLS enforces the same rule at the DB
-  // layer regardless.
+  // Section 11.2: locked from further edits once submitted (status ->
+  // pending_approval via the submit route) — RLS enforces the same rule at
+  // the DB layer regardless.
   if (proposal.status !== "draft") {
     return NextResponse.json(
       { error: "This proposal is locked and can no longer be edited." },
