@@ -32,6 +32,16 @@ export default async function DashboardLayout({
                 New proposal
               </Link>
             )}
+            {profile?.role === "admin" && (
+              <>
+                <Link href="/dashboard/admin/audit-log" className="px-1 py-1 text-paper/80">
+                  Audit log
+                </Link>
+                <Link href="/dashboard/admin/users" className="px-1 py-1 text-paper/80">
+                  Users
+                </Link>
+              </>
+            )}
           </nav>
         </div>
 
