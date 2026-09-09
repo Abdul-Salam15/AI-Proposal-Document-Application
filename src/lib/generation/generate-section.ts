@@ -63,7 +63,7 @@ export async function generateSection(
 
   const { data: existingVersions, error: existingError } = await service
     .from("proposal_versions")
-    .select("content")
+    .select("content, generated_by")
     .eq("proposal_id", proposal.id)
     .eq("section_name", sectionKey)
     .order("created_at", { ascending: false })
@@ -73,8 +73,16 @@ export async function generateSection(
     throw new Error(existingError.message);
   }
 
-  if (existingVersions && existingVersions.length > 0) {
-    return { outcome: "cached", content: existingVersions[0].content as string };
+  const latest = existingVersions?.[0];
+
+  // Section 11.1 cache rule: reuse the latest version instead of calling
+  // the API again — but only when it's still the AI's own last word on this
+  // section. A manual edit (PATCH, generated_by: 'human') is a real input
+  // change — the salesperson deliberately deviated from the AI output — so
+  // it must not be masked by the cache; a following regenerate should hit
+  // the API fresh.
+  if (latest && latest.generated_by === "ai") {
+    return { outcome: "cached", content: latest.content as string };
   }
 
   const missingFields = section.requiredFields.filter((field) =>

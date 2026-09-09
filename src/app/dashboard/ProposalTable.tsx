@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PROPOSAL_STATUS_META } from "@/lib/proposal-status";
 import type { Proposal } from "@/lib/types";
@@ -66,14 +67,19 @@ export default function ProposalTable() {
           return (
             <tr key={proposal.id} className="border-b border-rule">
               <td className="py-2 pr-4">
-                <span className="flex items-center gap-2">
+                <Link
+                  href={`/dashboard/proposals/${proposal.id}`}
+                  className="flex items-center gap-2"
+                >
                   <span
                     className={`h-2 w-2 shrink-0 rounded-full ${statusMeta.dotClassName}`}
                   />
                   {statusMeta.label}
-                </span>
+                </Link>
               </td>
-              <td className="py-2 pr-4">{proposal.client_name}</td>
+              <td className="py-2 pr-4">
+                <Link href={`/dashboard/proposals/${proposal.id}`}>{proposal.client_name}</Link>
+              </td>
               <td className="py-2 pr-4">{proposal.company_name}</td>
               <td className="py-2 pr-4">{proposal.salesperson_name}</td>
               <td className="py-2 pr-4">{proposal.date_of_call}</td>

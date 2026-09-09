@@ -9,6 +9,10 @@
   --color-slate: #5b7b96;
   --color-rule: #d6d0c0;
   --color-draft: #8b8879;
+  /* Section 14: "slightly darker paper backdrop" behind the document panel
+     — not a separately named token in the palette table, so derived here
+     as a modest shade of Paper. */
+  --color-paper-shade: #e3ddc9;
 
   --background: var(--color-paper);
   --foreground: var(--color-ink);
@@ -17,6 +21,7 @@
 @theme inline {
   --color-ink: var(--color-ink);
   --color-paper: var(--color-paper);
+  --color-paper-shade: var(--color-paper-shade);
   --color-brass: var(--color-brass);
   --color-oxblood: var(--color-oxblood);
   --color-slate: var(--color-slate);
