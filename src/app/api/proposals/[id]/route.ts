@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { writeAuditLog } from "@/lib/audit-log";
 import { getSession } from "@/lib/auth";
-import { isSectionKey } from "@/lib/generation/sections";
+import { isSectionKey, SECTIONS } from "@/lib/generation/sections";
 import { INTAKE_FIELDS, type IntakeFieldKey } from "@/lib/intake-fields";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -190,6 +190,17 @@ export async function PATCH(
 
   if (!isSectionKey(sectionKey)) {
     return NextResponse.json({ error: "A valid section is required." }, { status: 400 });
+  }
+
+  // Deliverables/Timeline/Pricing are structured content (a list/table),
+  // not a paragraph a salesperson can hand-edit in a plain text box — those
+  // sections are AI-generated only; Regenerate is the way to change them.
+  const section = SECTIONS.find((candidate) => candidate.key === sectionKey);
+  if (section?.format !== "prose") {
+    return NextResponse.json(
+      { error: "This section is AI-generated only — use Regenerate to update it." },
+      { status: 400 }
+    );
   }
 
   if (typeof content !== "string") {

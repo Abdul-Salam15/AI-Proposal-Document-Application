@@ -56,7 +56,7 @@ export async function POST(
   const service = createServiceClient();
 
   try {
-    const pdfBuffer = await renderProposalPdf(proposalLink);
+    const pdfBuffer = await renderProposalPdf(proposalLink, proposal.company_name);
 
     const { error: uploadError } = await service.storage
       .from("proposal-pdfs")

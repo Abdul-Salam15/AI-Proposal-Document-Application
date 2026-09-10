@@ -4,7 +4,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import type { Proposal, ProposalStatus } from "@/lib/types";
 import { callClaudeForSection } from "./claude";
 import { mockSectionContent } from "./mock";
-import { SECTIONS, type SectionKey } from "./sections";
+import { SECTIONS, type SectionContent, type SectionKey } from "./sections";
 
 // Section 11.1's cap ("after a small fixed limit... require the salesperson
 // to edit manually instead of calling the API again") is a permanent,
@@ -55,7 +55,7 @@ function computeContextHash(proposal: Proposal): string {
 
 export type GenerateOutcome =
   | { outcome: "needs_input"; content: string; missingFields: string[]; status: ProposalStatus }
-  | { outcome: "generated"; content: string; inputTokens: number; outputTokens: number; status: ProposalStatus }
+  | { outcome: "generated"; content: SectionContent; inputTokens: number; outputTokens: number; status: ProposalStatus }
   | { outcome: "rate_limited"; waitMinutes: number };
 
 /**
@@ -105,7 +105,10 @@ export async function generateSection(
     .eq("proposal_id", proposal.id)
     .eq("section_name", sectionKey)
     .eq("generated_by", "ai")
-    .not("content", "like", "[NEEDS INPUT:%")
+    // proposal_versions.content is jsonb; a [NEEDS INPUT: ...] sentinel is
+    // stored as a jsonb string scalar, whose ::text cast is its quoted JSON
+    // representation (e.g. '"[NEEDS INPUT: foo]"') — hence the leading %.
+    .not("content::text", "like", '%"[NEEDS INPUT:%')
     .gte("created_at", windowStart)
     .order("created_at", { ascending: true });
 
@@ -122,7 +125,7 @@ export async function generateSection(
 
   const mode = process.env.CLAUDE_GENERATION_MODE === "live" ? "live" : "mock";
 
-  let content: string;
+  let content: SectionContent;
   let inputTokens = 0;
   let outputTokens = 0;
 
@@ -134,7 +137,7 @@ export async function generateSection(
       contextText: buildContextText(proposal),
       supportingMaterial: proposal.supporting_material,
     });
-    content = result.text;
+    content = result.content;
     inputTokens = result.inputTokens;
     outputTokens = result.outputTokens;
   }
@@ -149,7 +152,7 @@ async function writeVersion(
   service: SupabaseClient,
   proposalId: string,
   sectionKey: SectionKey,
-  content: string,
+  content: SectionContent,
   contextHash: string
 ) {
   const { error } = await service.from("proposal_versions").insert({
@@ -168,7 +171,7 @@ async function updateProposalContent(
   supabase: SupabaseClient,
   proposalId: string,
   sectionKey: SectionKey,
-  content: string
+  content: SectionContent
 ): Promise<ProposalStatus> {
   // Atomic DB-side merge (merge_proposal_content, see its migration):
   // avoids the read-modify-write race where two sections generated or

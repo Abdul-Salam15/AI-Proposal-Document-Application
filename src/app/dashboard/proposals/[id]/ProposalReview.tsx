@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { SECTIONS, type SectionConfig, type SectionKey } from "@/lib/generation/sections";
+import { SECTIONS, type SectionConfig, type SectionContent, type SectionKey } from "@/lib/generation/sections";
 import { INTAKE_FIELDS, type IntakeFieldKey } from "@/lib/intake-fields";
 import type { Approval, Proposal, ProposalStatus } from "@/lib/types";
 
@@ -27,8 +27,8 @@ export default function ProposalReview({
   const [status, setStatus] = useState<ProposalStatus>(proposal.status);
   const [proposalLink, setProposalLink] = useState<string | null>(proposal.proposal_link);
   const [pdfUrl, setPdfUrl] = useState<string | null>(proposal.pdf_url);
-  const [content, setContent] = useState<Record<string, string>>(
-    (proposal.content as Record<string, string>) ?? {}
+  const [content, setContent] = useState<Record<string, SectionContent>>(
+    (proposal.content as Record<string, SectionContent>) ?? {}
   );
   const [intakeValues, setIntakeValues] = useState<Record<IntakeFieldKey, string>>(() => {
     const initial = {} as Record<IntakeFieldKey, string>;
@@ -63,7 +63,7 @@ export default function ProposalReview({
     router.refresh();
   }
 
-  function handleSectionUpdate(key: SectionKey, value: string) {
+  function handleSectionUpdate(key: SectionKey, value: SectionContent) {
     setContent((prev) => ({ ...prev, [key]: value }));
     setStaleSections((prev) => {
       if (!prev.has(key)) return prev;
@@ -747,10 +747,80 @@ function DeliveryBar({
 }
 
 type GenerationResult =
-  | { outcome: "needs_input" | "generated"; content: string; status?: ProposalStatus }
+  | { outcome: "needs_input" | "generated"; content: SectionContent; status?: ProposalStatus }
   | { outcome: "rate_limited"; waitMinutes: number }
   | { outcome: "in_progress" }
   | { outcome: "failed"; error: string };
+
+// Deliverables/Timeline/Pricing render as a list/table instead of a plain
+// paragraph. A section's stored value can still be a plain string even for
+// these formats — the [NEEDS INPUT: ...] sentinel, or a proposal generated
+// before structured content existed — so every renderer below falls back to
+// a plain paragraph whenever the value isn't (yet) the structured shape.
+function renderSectionContent(section: SectionConfig, content: SectionContent, hasContent: boolean) {
+  if (!hasContent) {
+    return <p className="font-sans text-sm italic text-ink/50">Not generated yet.</p>;
+  }
+
+  if (typeof content === "string") {
+    return <p className="whitespace-pre-wrap text-base leading-relaxed">{content}</p>;
+  }
+
+  if (section.format === "list" && Array.isArray(content)) {
+    return (
+      <ul className="flex flex-col gap-1 text-base leading-relaxed">
+        {content.map((item, index) => (
+          <li key={index}>— {item}</li>
+        ))}
+      </ul>
+    );
+  }
+
+  if (section.format === "timeline_table" && !Array.isArray(content) && "phases" in content) {
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="text-base leading-relaxed">{content.intro}</p>
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-rule text-left text-ink/60">
+              <th className="py-1 pr-3 font-medium">Phase</th>
+              <th className="py-1 pr-3 font-medium">Focus</th>
+              <th className="py-1 font-medium">Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {content.phases.map((row, index) => (
+              <tr key={index} className="border-b border-rule align-top">
+                <td className="py-1.5 pr-3 font-medium">{row.phase}</td>
+                <td className="py-1.5 pr-3 italic">{row.focus}</td>
+                <td className="py-1.5">{row.details}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  if (section.format === "pricing_table" && !Array.isArray(content) && "milestones" in content) {
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="text-base leading-relaxed">{content.summary}</p>
+        <p className="font-sans font-medium text-brass">Total investment — {content.totalInvestmentLabel}</p>
+        <ul className="flex flex-col text-sm">
+          {content.milestones.map((milestone, index) => (
+            <li key={index} className="flex justify-between border-b border-rule py-1.5">
+              <span>{milestone.label}</span>
+              <span className="font-medium">{milestone.percent}%</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  return null;
+}
 
 function SectionBlock({
   proposalId,
@@ -764,21 +834,21 @@ function SectionBlock({
 }: {
   proposalId: string;
   section: SectionConfig;
-  content: string;
+  content: SectionContent;
   hasContent: boolean;
   editable: boolean;
   isStale: boolean;
-  onUpdate: (value: string) => void;
+  onUpdate: (value: SectionContent) => void;
   onStatusChange: (status: ProposalStatus) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [draft, setDraft] = useState(content);
+  const [draft, setDraft] = useState(typeof content === "string" ? content : "");
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isAiInferred = AI_INFERRED_SECTIONS.includes(section.key);
-  const needsInput = content.includes("[NEEDS INPUT");
+  const needsInput = typeof content === "string" && content.includes("[NEEDS INPUT");
 
   async function handleGenerate(isRegenerate: boolean) {
     // Section 11.1: ignore duplicate clicks while a request is in flight.
@@ -822,7 +892,9 @@ function SectionBlock({
         setError(result.error);
       } else {
         onUpdate(result.content);
-        setDraft(result.content);
+        if (typeof result.content === "string") {
+          setDraft(result.content);
+        }
         if (result.status) {
           onStatusChange(result.status);
         }
@@ -893,10 +965,8 @@ function SectionBlock({
           rows={5}
           className="w-full border border-rule bg-paper p-3 font-serif text-base text-ink outline-none transition-colors hover:border-ink/30 focus:border-slate"
         />
-      ) : hasContent ? (
-        <p className="whitespace-pre-wrap text-base leading-relaxed">{content}</p>
       ) : (
-        <p className="font-sans text-sm italic text-ink/50">Not generated yet.</p>
+        renderSectionContent(section, content, hasContent)
       )}
 
       {error && <p className="mt-2 font-sans text-sm text-oxblood">{error}</p>}
@@ -917,7 +987,7 @@ function SectionBlock({
                 type="button"
                 onClick={() => {
                   setIsEditing(false);
-                  setDraft(content);
+                  setDraft(typeof content === "string" ? content : "");
                 }}
                 disabled={isSaving}
                 className="border border-rule px-3 py-1 text-ink/70 transition-colors hover:border-ink/40 hover:text-ink disabled:pointer-events-none disabled:opacity-50"
@@ -927,16 +997,18 @@ function SectionBlock({
             </>
           ) : (
             <>
-              <button
-                type="button"
-                onClick={() => {
-                  setDraft(content);
-                  setIsEditing(true);
-                }}
-                className="border border-rule px-3 py-1 text-ink/70 transition-colors hover:border-ink/40 hover:text-ink disabled:pointer-events-none disabled:opacity-50"
-              >
-                Edit
-              </button>
+              {section.format === "prose" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraft(typeof content === "string" ? content : "");
+                    setIsEditing(true);
+                  }}
+                  className="border border-rule px-3 py-1 text-ink/70 transition-colors hover:border-ink/40 hover:text-ink disabled:pointer-events-none disabled:opacity-50"
+                >
+                  Edit
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => handleGenerate(hasContent)}

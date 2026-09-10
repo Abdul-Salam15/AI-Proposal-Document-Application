@@ -11,16 +11,40 @@
 // Margin/header/footer are set here rather than via CSS @page: Chromium's
 // print-to-PDF only honors @page size/margin when preferCSSPageSize is on,
 // and page numbers have no CSS equivalent at all — Puppeteer's
-// header/footer templates are the only way to get them.
-const PDF_MARGIN = { top: "18mm", bottom: "16mm", left: "16mm", right: "16mm" };
-const PDF_HEADER_TEMPLATE = "<div></div>";
+// header/footer templates are the only way to get them. The running
+// company-name header also needs to repeat identically on every page
+// (including the cover), which is exactly what these templates do and an
+// in-page `position: fixed` element does not for a single continuously
+// laid-out document being paginated into a PDF.
+const PDF_MARGIN = { top: "20mm", bottom: "18mm", left: "16mm", right: "16mm" };
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => {
+    switch (char) {
+      case "&": return "&amp;";
+      case "<": return "&lt;";
+      case ">": return "&gt;";
+      case '"': return "&quot;";
+      default: return "&#39;";
+    }
+  });
+}
+
+function headerTemplate(companyName: string): string {
+  return `
+    <div style="width: 100%; padding: 0 16mm; font-family: Georgia, 'Times New Roman', serif; font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; color: #8b8879; text-align: center;">
+      ${escapeHtml(companyName)}
+    </div>
+  `;
+}
+
 const PDF_FOOTER_TEMPLATE = `
-  <div style="width: 100%; padding: 0 16mm; font-family: Georgia, 'Times New Roman', serif; font-size: 9px; color: #8b8879; text-align: center;">
-    Page <span class="pageNumber"></span> of <span class="totalPages"></span>
+  <div style="width: 100%; font-family: Georgia, 'Times New Roman', serif; font-size: 9px; color: #8b8879; text-align: center;">
+    — <span class="pageNumber"></span> —
   </div>
 `;
 
-export async function renderProposalPdf(url: string): Promise<Buffer> {
+export async function renderProposalPdf(url: string, companyName: string): Promise<Buffer> {
   const isDev = process.env.NODE_ENV === "development";
 
   if (isDev) {
@@ -34,7 +58,7 @@ export async function renderProposalPdf(url: string): Promise<Buffer> {
         printBackground: true,
         margin: PDF_MARGIN,
         displayHeaderFooter: true,
-        headerTemplate: PDF_HEADER_TEMPLATE,
+        headerTemplate: headerTemplate(companyName),
         footerTemplate: PDF_FOOTER_TEMPLATE,
       });
       return Buffer.from(pdf);
@@ -60,7 +84,7 @@ export async function renderProposalPdf(url: string): Promise<Buffer> {
       printBackground: true,
       margin: PDF_MARGIN,
       displayHeaderFooter: true,
-      headerTemplate: PDF_HEADER_TEMPLATE,
+      headerTemplate: headerTemplate(companyName),
       footerTemplate: PDF_FOOTER_TEMPLATE,
     });
     return Buffer.from(pdf);
