@@ -19,6 +19,7 @@ export default function UsersTable({ currentUserId }: { currentUserId: string })
   const [savingId, setSavingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+  const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -69,6 +70,44 @@ export default function UsersTable({ currentUserId }: { currentUserId: string })
       setUsers((prev) =>
         prev ? prev.map((u) => (u.id === id ? { ...u, role: data.user.role } : u)) : prev
       );
+    } catch {
+      setRowErrors((prev) => ({ ...prev, [id]: "Unable to reach the server." }));
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function handleNameSave(id: string) {
+    const draft = nameDrafts[id];
+    const current = users?.find((u) => u.id === id);
+    if (draft === undefined || !current || savingId) return;
+
+    const trimmed = draft.trim();
+    if (trimmed === (current.name ?? "")) {
+      setNameDrafts((prev) => Object.fromEntries(Object.entries(prev).filter(([key]) => key !== id)));
+      return;
+    }
+
+    setSavingId(id);
+    setRowErrors((prev) => ({ ...prev, [id]: "" }));
+
+    try {
+      const response = await fetch(`/api/users/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed || null }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setRowErrors((prev) => ({ ...prev, [id]: data.error ?? "Update failed." }));
+        return;
+      }
+
+      setUsers((prev) =>
+        prev ? prev.map((u) => (u.id === id ? { ...u, name: data.user.name } : u)) : prev
+      );
+      setNameDrafts((prev) => Object.fromEntries(Object.entries(prev).filter(([key]) => key !== id)));
     } catch {
       setRowErrors((prev) => ({ ...prev, [id]: "Unable to reach the server." }));
     } finally {
@@ -129,7 +168,24 @@ export default function UsersTable({ currentUserId }: { currentUserId: string })
                   key={user.id}
                   className="border-b border-rule transition-colors hover:bg-paper-shade"
                 >
-                  <td className="py-2 pr-4">{user.name || "—"}</td>
+                  <td className="py-2 pr-4">
+                    <input
+                      type="text"
+                      value={nameDrafts[user.id] ?? user.name ?? ""}
+                      disabled={savingId === user.id}
+                      placeholder="—"
+                      onChange={(event) =>
+                        setNameDrafts((prev) => ({ ...prev, [user.id]: event.target.value }))
+                      }
+                      onBlur={() => handleNameSave(user.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.currentTarget.blur();
+                        }
+                      }}
+                      className="w-full border border-transparent bg-transparent px-2 py-1 text-sm text-ink outline-none transition-colors hover:border-ink/30 focus:border-slate disabled:pointer-events-none disabled:opacity-50"
+                    />
+                  </td>
                   <td className="py-2 pr-4">{user.email}</td>
                   <td className="py-2 pr-4">
                     <select

@@ -13,10 +13,10 @@ function isRole(value: unknown): value is UserRole {
   return typeof value === "string" && (ROLES as string[]).includes(value);
 }
 
-// PATCH /api/users/[id] — Section 12/13: admin only, changes a user's role.
-// No other fields are editable through this route (Section 13: a user can
-// update their own non-role fields themselves — that's a separate, unbuilt
-// concern this route doesn't touch).
+// PATCH /api/users/[id] — Section 12/13: admin only, changes a user's role
+// and/or display name. (Section 13: a user can update their own non-role
+// fields themselves — that's a separate, unbuilt concern this route doesn't
+// touch.)
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -33,22 +33,35 @@ export async function PATCH(
   }
 
   const body = await request.json().catch(() => null);
-  const role = body?.role;
+  const hasRole = !!body && Object.prototype.hasOwnProperty.call(body, "role");
+  const hasName = !!body && Object.prototype.hasOwnProperty.call(body, "name");
 
-  if (!isRole(role)) {
+  if (!hasRole && !hasName) {
+    return NextResponse.json({ error: "Provide a role and/or name to update." }, { status: 400 });
+  }
+
+  if (hasRole && !isRole(body.role)) {
     return NextResponse.json(
       { error: "role must be one of: salesperson, admin." },
       { status: 400 }
     );
   }
 
+  if (hasName && body.name !== null && typeof body.name !== "string") {
+    return NextResponse.json({ error: "Name must be a string or null." }, { status: 400 });
+  }
+
+  const updates: { role?: UserRole; name?: string | null } = {};
+  if (hasRole) updates.role = body.role;
+  if (hasName) updates.name = typeof body.name === "string" ? body.name.trim() || null : null;
+
   const supabase = await createClient();
 
-  const { data: before } = await supabase.from("users").select("role").eq("id", id).single();
+  const { data: before } = await supabase.from("users").select("role, name").eq("id", id).single();
 
   const { data: updated, error } = await supabase
     .from("users")
-    .update({ role })
+    .update(updates)
     .eq("id", id)
     .select("id, email, name, role, created_at")
     .single();
@@ -56,21 +69,33 @@ export async function PATCH(
   if (error || !updated) {
     await writeAuditLog({
       actorId: user.id,
-      action: "user_role_change_failed",
+      action: "user_update_failed",
       targetId: id,
-      metadata: { role, error: error?.message ?? "User not found." },
+      metadata: { ...updates, error: error?.message ?? "User not found." },
     });
     return NextResponse.json({ error: error?.message ?? "User not found." }, { status: 404 });
   }
 
-  await writeAuditLog({
-    actorId: user.id,
-    action: "user_role_changed",
-    targetId: id,
-    metadata: { role, fromRole: before?.role ?? null },
-  });
+  if (hasRole) {
+    await writeAuditLog({
+      actorId: user.id,
+      action: "user_role_changed",
+      targetId: id,
+      metadata: { role: updated.role, fromRole: before?.role ?? null },
+    });
+  }
 
-  if (before?.role && before.role !== role) {
+  if (hasName && before?.name !== updated.name) {
+    await writeAuditLog({
+      actorId: user.id,
+      action: "user_name_changed",
+      targetId: id,
+      metadata: { name: updated.name, fromName: before?.name ?? null },
+    });
+  }
+
+  const role = updated.role;
+  if (hasRole && before?.role && before.role !== role) {
     const origin = new URL(request.url).origin;
     const adminName = profile.name || profile.email;
 
