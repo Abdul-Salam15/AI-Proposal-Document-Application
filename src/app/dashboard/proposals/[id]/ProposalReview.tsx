@@ -747,7 +747,7 @@ function DeliveryBar({
 }
 
 type GenerationResult =
-  | { outcome: "cached" | "needs_input" | "generated"; content: string; status?: ProposalStatus }
+  | { outcome: "needs_input" | "generated"; content: string; status?: ProposalStatus }
   | { outcome: "rate_limited"; waitMinutes: number }
   | { outcome: "in_progress" }
   | { outcome: "failed"; error: string };

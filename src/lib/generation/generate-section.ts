@@ -27,30 +27,6 @@ function isMissing(value: string | null | undefined): boolean {
   return normalized.length === 0 || JUNK_VALUES.has(normalized);
 }
 
-// A [NEEDS INPUT: field] placeholder (written below) is not real generated
-// content — it's a note that a required field was blank at generation time.
-// It must never be treated as a cache hit: unlike a real AI section, it can
-// become wrong the moment the salesperson fills in the field it's pointing
-// at, and nothing else re-checks that.
-function isNeedsInputPlaceholder(content: string): boolean {
-  return content.startsWith("[NEEDS INPUT:");
-}
-
-// claude.ts now rejects a degenerate response (e.g. a bare "# Project
-// Scope" heading with no prose) before it's ever saved — but a proposal
-// generated before that guard existed can already have one sitting in
-// proposal_versions as a normal 'ai' row. Recognizing the same pattern here
-// means clicking Regenerate on an already-corrupted section heals it (falls
-// through to a fresh API call below) instead of re-serving the same
-// unusable cached text forever.
-function isBareHeading(content: string): boolean {
-  return content.split("\n").filter((line) => line.trim()).length <= 1 && /^#{1,6}\s/.test(content);
-}
-
-function isUnusableCachedContent(content: string): boolean {
-  return isNeedsInputPlaceholder(content) || isBareHeading(content);
-}
-
 function buildContextText(proposal: Proposal): string {
   return [
     `Client: ${proposal.client_name}`,
@@ -66,33 +42,25 @@ function buildContextText(proposal: Proposal): string {
   ].join("\n");
 }
 
-// Section 11.1: "if the same section is regenerated with no changed
-// inputs, return the last cached version." Every section's prompt is built
-// from this same full context blob (not just its own required field), so
-// this hash has to cover all of it — editing pricing alone still has to
-// invalidate Project Scope's cache too, since pricing is part of the
-// context Project Scope was generated from.
+// Recorded on every AI-generated version as provenance (which intake
+// context produced it) — not used to skip a Claude call. Per product
+// decision, Regenerate always calls Claude again (bounded by the rate
+// limit below); it no longer silently reuses a prior version even when
+// nothing changed, since a "regenerate" click was landing as a no-op with
+// no visible feedback.
 function computeContextHash(proposal: Proposal): string {
   const raw = `${buildContextText(proposal)}\n---\n${proposal.supporting_material ?? ""}`;
   return createHash("sha256").update(raw).digest("hex");
 }
 
 export type GenerateOutcome =
-  | { outcome: "cached"; content: string; status: ProposalStatus }
   | { outcome: "needs_input"; content: string; missingFields: string[]; status: ProposalStatus }
   | { outcome: "generated"; content: string; inputTokens: number; outputTokens: number; status: ProposalStatus }
   | { outcome: "rate_limited"; waitMinutes: number };
 
 /**
  * Generates (or regenerates) a single section for a proposal, applying
- * every Section 11.1 cost control along the way:
- *  - cache: if a version already exists for this section *and* the intake
- *    context it was generated from hasn't changed since (tracked via
- *    context_hash), reuse it rather than calling the API again. An edited
- *    field still only passively flags the section as stale in the review
- *    UI rather than auto-regenerating it — but once the salesperson does
- *    click Regenerate, this makes sure that actually produces fresh output
- *    instead of silently re-serving the old cached text.
+ * the remaining Section 11.1 cost controls:
  *  - missing-input short-circuit: if a required field is blank, skip the
  *    API call entirely and write the [NEEDS INPUT] marker directly —
  *    functionally equivalent to Section 8's behavior, at zero cost.
@@ -115,29 +83,6 @@ export async function generateSection(
   const service = createServiceClient();
   const contextHash = computeContextHash(proposal);
 
-  const { data: existingVersions, error: existingError } = await service
-    .from("proposal_versions")
-    .select("content, generated_by, context_hash")
-    .eq("proposal_id", proposal.id)
-    .eq("section_name", sectionKey)
-    .order("created_at", { ascending: false })
-    .limit(1);
-
-  if (existingError) {
-    throw new Error(existingError.message);
-  }
-
-  const latest = existingVersions?.[0];
-  const latestContent = latest?.content as string | undefined;
-
-  // Section 8/11.2's missing-field check always takes priority over the
-  // cache, even when a real cached version already exists: if a required
-  // field has since gone blank or become a junk placeholder (e.g. pricing
-  // edited to "TBD" after a real Pricing section was already generated),
-  // that must surface as [NEEDS INPUT] rather than silently re-serving the
-  // now-unsupported cached text. This costs nothing either way (no Claude
-  // call on this path), so it's not in tension with the cache's cost-control
-  // purpose — it's purely a correctness check that has to run first.
   const missingFields = section.requiredFields.filter((field) =>
     isMissing(proposal[field] as string | null)
   );
@@ -147,34 +92,6 @@ export async function generateSection(
     await writeVersion(service, proposal.id, sectionKey, content, contextHash);
     const status = await updateProposalContent(supabase, proposal.id, sectionKey, content);
     return { outcome: "needs_input", content, missingFields, status };
-  }
-
-  // Section 11.1 cache rule: reuse the latest version instead of calling
-  // the API again — but only when it's still the AI's own last word on this
-  // section, produced from inputs that haven't changed since ("if the same
-  // section is regenerated with no changed inputs, return the last cached
-  // version"). A manual edit (PATCH, generated_by: 'human') is a real input
-  // change — the salesperson deliberately deviated from the AI output — so
-  // it must not be masked by the cache. Same for a [NEEDS INPUT] placeholder,
-  // a degenerate bare-heading response (isUnusableCachedContent above), or a
-  // context_hash mismatch (some intake field changed since this version was
-  // generated, even one belonging to a different section — every section's
-  // prompt is built from the same full context): none of these are a real,
-  // still-current AI answer, so this falls through to a fresh call below.
-  //
-  // Still write-through to `content` even on a genuine cache hit: this call
-  // costs nothing (no Claude API call, just a cheap DB write), and without
-  // it a proposal_versions row that exists but was never successfully
-  // synced to `content` (e.g. from a since-fixed write bug) would return
-  // cached text on every future click forever without ever persisting it.
-  if (
-    latest &&
-    latest.generated_by === "ai" &&
-    latest.context_hash === contextHash &&
-    !isUnusableCachedContent(latestContent!)
-  ) {
-    const status = await updateProposalContent(supabase, proposal.id, sectionKey, latestContent!);
-    return { outcome: "cached", content: latestContent!, status };
   }
 
   // Rolling window: only real API calls in the last REGENERATION_WINDOW_MS
