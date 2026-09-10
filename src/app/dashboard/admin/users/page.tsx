@@ -3,7 +3,7 @@ import { getSession } from "@/lib/auth";
 import UsersTable from "./UsersTable";
 
 export default async function UsersPage() {
-  const { profile } = await getSession();
+  const { user, profile } = await getSession();
 
   if (profile?.role !== "admin") {
     redirect("/dashboard");
@@ -15,7 +15,7 @@ export default async function UsersPage() {
         <p className="text-sm text-slate">Admin</p>
         <h1 className="text-2xl font-medium">Users</h1>
       </div>
-      <UsersTable />
+      <UsersTable currentUserId={user!.id} />
     </div>
   );
 }

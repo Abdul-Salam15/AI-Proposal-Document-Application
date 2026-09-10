@@ -22,6 +22,9 @@ export type IntakeFieldConfig = {
   type: "text" | "email" | "date" | "textarea";
   required: boolean;
   helpText?: string;
+  // false means this field is derived server-side (e.g. from the logged-in
+  // account) rather than typed by the user — omitted (undefined) means true.
+  editable?: boolean;
 };
 
 // The 11 "Intake" sources from Section 5's field mapping, plus
@@ -32,7 +35,14 @@ export const INTAKE_FIELDS: IntakeFieldConfig[] = [
   { key: "client_email", label: "Client email", type: "email", required: true },
   { key: "company_name", label: "Company name", type: "text", required: true },
   { key: "date_of_call", label: "Date of call", type: "date", required: true },
-  { key: "salesperson_name", label: "Salesperson name", type: "text", required: true },
+  {
+    key: "salesperson_name",
+    label: "Salesperson name",
+    type: "text",
+    required: true,
+    editable: false,
+    helpText: "Set automatically from your account — this is who the client will hear from.",
+  },
   {
     key: "client_needs_summary",
     label: "Client needs summary",
@@ -60,6 +70,6 @@ export const INTAKE_FIELDS: IntakeFieldConfig[] = [
     type: "textarea",
     required: false,
     helpText:
-      "Notes, prior proposals, or reference material (Section 9). Passed to Claude as context during generation.",
+      "Notes, prior proposals, or reference material. Used as context during generation.",
   },
 ];

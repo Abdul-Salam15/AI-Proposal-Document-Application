@@ -1,4 +1,16 @@
-export type UserRole = "salesperson" | "approver" | "admin";
+export type UserRole = "salesperson" | "admin";
+
+export type ApprovalDecision = "approved" | "rejected";
+
+export type Approval = {
+  id: string;
+  proposal_id: string;
+  approver_id: string;
+  decision: ApprovalDecision;
+  comment: string | null;
+  created_at: string;
+  approver: { name: string | null; email: string } | null;
+};
 
 export type ProposalStatus =
   | "draft"

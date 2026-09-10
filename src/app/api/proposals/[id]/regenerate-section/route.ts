@@ -6,8 +6,10 @@ import { release, tryAcquire } from "@/lib/generation/in-flight";
 import { isSectionKey } from "@/lib/generation/sections";
 
 // POST /api/proposals/[id]/regenerate-section — Section 12: regenerate one
-// section only; enforces the regeneration cap (Section 11.1) and writes a
-// new proposal_versions row. Salesperson (owner) only.
+// section only; enforces the regeneration rate limit (Section 11.1, as a
+// rolling 10-minute window rather than a permanent cap — see
+// generate-section.ts) and writes a new proposal_versions row. Salesperson
+// (owner) only.
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -48,14 +50,22 @@ export async function POST(
         outcome: result.outcome,
         inputTokens: "inputTokens" in result ? result.inputTokens : 0,
         outputTokens: "outputTokens" in result ? result.outputTokens : 0,
+        // Auto-revert on edit: writing content while pending_approval
+        // pulls the proposal back into draft (generate-section.ts).
+        revertedToDraft:
+          "status" in result &&
+          result.status === "draft" &&
+          proposal.status === "pending_approval",
       },
     });
 
-    if (result.outcome === "capped") {
+    if (result.outcome === "rate_limited") {
+      const unit = result.waitMinutes === 1 ? "minute" : "minutes";
       return NextResponse.json(
         {
-          error: "Regeneration limit reached for this section. Edit it manually instead.",
-          outcome: "capped",
+          error: `Regeneration limit reached for this section. Wait ${result.waitMinutes} ${unit} and try again.`,
+          outcome: "rate_limited",
+          waitMinutes: result.waitMinutes,
         },
         { status: 429 }
       );

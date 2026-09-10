@@ -2,8 +2,12 @@ import { NextResponse } from "next/server";
 import { writeAuditLog } from "@/lib/audit-log";
 import { getSession } from "@/lib/auth";
 import { renderProposalPdf } from "@/lib/delivery/render-pdf";
+import { getUserById } from "@/lib/notifications/recipients";
+import { sendNotificationEmail } from "@/lib/notifications/send-email";
+import { buildDeliveryFailedEmail } from "@/lib/notifications/templates";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import type { Proposal } from "@/lib/types";
 
 // Export is allowed once approved, and again on retry after a prior export
 // failure (Section 11.2: a failed downstream step shouldn't force
@@ -11,9 +15,13 @@ import { createServiceClient } from "@/lib/supabase/service";
 // marks that a later step broke and can be retried).
 const EXPORTABLE_STATUSES = ["approved", "failed"];
 
+// Vercel's default serverless timeout (10s) is too tight for a cold
+// Chromium launch + page render (render-pdf.ts). 60s is the Hobby-plan cap.
+export const maxDuration = 60;
+
 // POST /api/proposals/[id]/export — Section 12: renders the proposal to a
 // hosted page + PDF; produces the {{proposal_link}} value. Salesperson,
-// approver, or admin — only after approved.
+// or admin — only after approved.
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -102,6 +110,19 @@ export async function POST(
       targetId: id,
       metadata: { error: message },
     });
+
+    const owner = await getUserById(service, proposal.owner_id);
+    if (owner) {
+      const failure = buildDeliveryFailedEmail(proposal as Proposal, "export", message, origin);
+      await sendNotificationEmail({
+        to: owner.email,
+        subject: failure.subject,
+        text: failure.body,
+        actorId: user.id,
+        notificationType: "delivery_failed",
+        targetId: id,
+      });
+    }
 
     return NextResponse.json(
       {

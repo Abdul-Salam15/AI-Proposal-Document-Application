@@ -45,7 +45,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm border border-rule px-8 py-10">
         <h1 className="mb-1 text-xl font-medium">Sign in</h1>
         <p className="mb-8 text-sm text-ink/60">
-          AI Proposal Document Application
+          AI Proposal Generator
         </p>
 
         <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
@@ -57,7 +57,7 @@ export default function LoginPage() {
               autoComplete="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="border border-rule bg-paper px-3 py-2 text-sm text-ink outline-none focus:border-slate"
+              className="border border-rule bg-paper px-3 py-2 text-sm text-ink outline-none transition-colors hover:border-ink/30 focus:border-slate"
             />
           </label>
 
@@ -69,7 +69,7 @@ export default function LoginPage() {
               autoComplete="current-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="border border-rule bg-paper px-3 py-2 text-sm text-ink outline-none focus:border-slate"
+              className="border border-rule bg-paper px-3 py-2 text-sm text-ink outline-none transition-colors hover:border-ink/30 focus:border-slate"
             />
           </label>
 
@@ -78,7 +78,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="mt-2 bg-ink px-4 py-2 text-sm font-medium text-paper transition-opacity disabled:opacity-50"
+            className="mt-2 bg-ink px-4 py-2 text-sm font-medium text-paper transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
           >
             {isSubmitting ? "Signing in…" : "Sign in"}
           </button>

@@ -52,6 +52,12 @@ export async function POST(
           outcome: result.outcome,
           inputTokens: "inputTokens" in result ? result.inputTokens : 0,
           outputTokens: "outputTokens" in result ? result.outputTokens : 0,
+          // Auto-revert on edit: writing content while pending_approval
+          // pulls the proposal back into draft (generate-section.ts).
+          revertedToDraft:
+            "status" in result &&
+            result.status === "draft" &&
+            proposal.status === "pending_approval",
         },
       });
     } catch (err) {

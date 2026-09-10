@@ -70,12 +70,15 @@ export default function AuditLogTable() {
         </thead>
         <tbody>
           {entries.map((entry) => (
-            <tr key={entry.id} className="border-b border-rule align-top">
+            <tr
+              key={entry.id}
+              className="border-b border-rule align-top transition-colors hover:bg-paper-shade"
+            >
               <td className="whitespace-nowrap py-2 pr-4">
                 {new Date(entry.created_at).toLocaleString()}
               </td>
               <td className="py-2 pr-4">
-                {entry.actor?.name || entry.actor?.email || entry.actor_id}
+                {entry.actor?.name || entry.actor?.email || entry.actor_id || "Deleted user"}
               </td>
               <td className="py-2 pr-4">{entry.action}</td>
               <td className="py-2 pr-4 font-mono text-xs text-ink/60">

@@ -65,7 +65,10 @@ export default function ProposalTable() {
         {proposals.map((proposal) => {
           const statusMeta = PROPOSAL_STATUS_META[proposal.status];
           return (
-            <tr key={proposal.id} className="border-b border-rule">
+            <tr
+              key={proposal.id}
+              className="border-b border-rule transition-colors hover:bg-paper-shade"
+            >
               <td className="py-2 pr-4">
                 <Link
                   href={`/dashboard/proposals/${proposal.id}`}
@@ -78,7 +81,12 @@ export default function ProposalTable() {
                 </Link>
               </td>
               <td className="py-2 pr-4">
-                <Link href={`/dashboard/proposals/${proposal.id}`}>{proposal.client_name}</Link>
+                <Link
+                  href={`/dashboard/proposals/${proposal.id}`}
+                  className="hover:underline"
+                >
+                  {proposal.client_name}
+                </Link>
               </td>
               <td className="py-2 pr-4">{proposal.company_name}</td>
               <td className="py-2 pr-4">{proposal.salesperson_name}</td>

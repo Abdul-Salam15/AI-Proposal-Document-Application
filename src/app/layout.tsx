@@ -15,7 +15,7 @@ const sourceSerif4 = Source_Serif_4({
 });
 
 export const metadata: Metadata = {
-  title: "AI Proposal Document Application",
+  title: "AI Proposal Generator",
   description: "Internal proposal generation, review, and approval workflow.",
 };
 

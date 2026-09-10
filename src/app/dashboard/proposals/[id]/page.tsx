@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { PROPOSAL_STATUS_META } from "@/lib/proposal-status";
 import { createClient } from "@/lib/supabase/server";
-import type { Proposal } from "@/lib/types";
+import type { Approval, Proposal } from "@/lib/types";
 import ProposalReview from "./ProposalReview";
 
 export default async function ProposalReviewPage({
@@ -29,17 +29,24 @@ export default async function ProposalReviewPage({
     notFound();
   }
 
+  const { data: approvals } = await supabase
+    .from("approvals")
+    .select("*, approver:users(name, email)")
+    .eq("proposal_id", id)
+    .order("created_at", { ascending: false });
+
   // Section 3: only the owning salesperson can edit, regenerate, or submit
   // content — and only while still draft (Section 13: locked once
-  // submitted). An approver/admin can act only while pending_approval.
+  // submitted). An admin can act only while pending_approval.
   const canEdit = profile?.role === "salesperson" && proposal.owner_id === user.id;
-  const canApprove = profile?.role === "approver" || profile?.role === "admin";
+  const canApprove = profile?.role === "admin";
+  const isAdmin = profile?.role === "admin";
   const statusMeta = PROPOSAL_STATUS_META[proposal.status as Proposal["status"]];
 
   return (
     <div className="-mx-10 -my-8 min-h-[calc(100%+4rem)] bg-paper-shade px-10 py-10">
       <div className="mx-auto flex max-w-2xl flex-col gap-1 pb-8 font-sans">
-        <Link href="/dashboard" className="text-sm text-slate">
+        <Link href="/dashboard" className="text-sm text-slate transition-colors hover:underline">
           ← Proposals
         </Link>
         <h1 className="mt-1 text-2xl font-medium text-ink">{proposal.company_name}</h1>
@@ -52,7 +59,13 @@ export default async function ProposalReviewPage({
         </p>
       </div>
 
-      <ProposalReview proposal={proposal as Proposal} canEdit={canEdit} canApprove={canApprove} />
+      <ProposalReview
+        proposal={proposal as Proposal}
+        approvals={(approvals as Approval[]) ?? []}
+        canEdit={canEdit}
+        canApprove={canApprove}
+        isAdmin={isAdmin}
+      />
     </div>
   );
 }

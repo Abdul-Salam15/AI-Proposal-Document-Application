@@ -9,7 +9,6 @@ export default async function DashboardPage() {
       <div>
         <p className="text-sm text-slate">
           {profile?.role === "salesperson" && "Your proposals"}
-          {profile?.role === "approver" && "Pending approval"}
           {profile?.role === "admin" && "All proposals"}
         </p>
         <h1 className="text-2xl font-medium">Proposals</h1>

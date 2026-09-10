@@ -1,64 +1,62 @@
-const SWATCHES = [
-  { name: "Ink", className: "bg-ink", hex: "#1B2430" },
-  { name: "Paper", className: "bg-paper", hex: "#EFEBE1" },
-  { name: "Brass", className: "bg-brass", hex: "#A67C3A" },
-  { name: "Oxblood", className: "bg-oxblood", hex: "#7A2E2E" },
-  { name: "Slate", className: "bg-slate", hex: "#5B7B96" },
-  { name: "Rule", className: "bg-rule", hex: "#D6D0C0" },
-  { name: "Draft", className: "bg-draft", hex: "#8B8879" },
+import Link from "next/link";
+import { getSession } from "@/lib/auth";
+
+const STEPS = [
+  {
+    title: "Capture the call",
+    body: "A salesperson logs the client, company, and call details right after the conversation — needs, goals, scope, timeline, pricing.",
+  },
+  {
+    title: "AI drafts the proposal",
+    body: "Claude generates each section of the proposal from that intake — recommended approach, deliverables, pricing, and the rest — ready to review.",
+  },
+  {
+    title: "Review, edit, approve",
+    body: "The salesperson edits or regenerates any section, then submits it. An admin signs off before anything reaches a client.",
+  },
+  {
+    title: "Export and deliver",
+    body: "Once approved, the proposal exports to a hosted page and PDF, and sends straight to the client's inbox.",
+  },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const { profile } = await getSession();
+  const isSignedIn = Boolean(profile);
+
   return (
-    <div className="flex flex-1 flex-col items-center gap-12 bg-paper px-8 py-16 font-sans text-ink">
-      <div className="flex max-w-2xl flex-col gap-2 text-center">
-        <p className="text-sm font-medium text-slate">Scaffold check</p>
-        <h1 className="text-2xl font-medium">Design tokens &amp; fonts</h1>
-        <p className="text-sm text-ink/70">
-          Placeholder page confirming the Ledger palette and typefaces are
-          wired up. No application pages yet.
+    <div className="flex flex-1 flex-col items-center bg-paper px-8 py-20 font-sans text-ink">
+      <div className="flex max-w-2xl flex-col items-center gap-4 text-center">
+        <p className="text-sm font-medium text-slate">Internal tool</p>
+        <h1 className="text-3xl font-medium">AI Proposal Generator</h1>
+        <p className="text-base text-ink/70">
+          Turns a sales call into a drafted, reviewed, and approved client
+          proposal — with AI writing the first pass so your team edits
+          instead of starting from a blank page.
         </p>
+        <Link
+          href={isSignedIn ? "/dashboard" : "/login"}
+          className="mt-4 bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-opacity hover:opacity-90"
+        >
+          {isSignedIn ? "Go to dashboard" : "Sign in"}
+        </Link>
       </div>
 
-      <div className="grid w-full max-w-2xl grid-cols-2 gap-4 sm:grid-cols-4">
-        {SWATCHES.map((swatch) => (
-          <div key={swatch.name} className="flex flex-col gap-2">
-            <div
-              className={`h-16 w-full rounded-none border border-rule ${swatch.className}`}
-            />
-            <div className="text-sm">
-              <p className="font-medium">{swatch.name}</p>
-              <p className="text-ink/60">{swatch.hex}</p>
-            </div>
+      <div className="mt-20 grid w-full max-w-3xl grid-cols-1 gap-8 border-t border-rule pt-12 sm:grid-cols-2">
+        {STEPS.map((step, index) => (
+          <div key={step.title} className="flex flex-col gap-1.5">
+            <p className="text-xs font-medium tracking-wide text-slate">
+              {String(index + 1).padStart(2, "0")}
+            </p>
+            <p className="font-medium">{step.title}</p>
+            <p className="text-sm text-ink/70">{step.body}</p>
           </div>
         ))}
       </div>
 
-      <div className="flex w-full max-w-2xl flex-col gap-6 border-t border-rule pt-8">
-        <div>
-          <p className="mb-2 text-sm font-medium text-slate">
-            Dashboard chrome — Public Sans (400 / 500)
-          </p>
-          <p className="font-sans text-lg font-normal">
-            The quick brown fox jumps over the lazy dog. 0123456789
-          </p>
-          <p className="font-sans text-lg font-medium">
-            The quick brown fox jumps over the lazy dog. 0123456789
-          </p>
-        </div>
-
-        <div>
-          <p className="mb-2 text-sm font-medium text-slate">
-            Proposal document — Source Serif 4 (400 / 500)
-          </p>
-          <p className="font-serif text-lg font-normal">
-            The quick brown fox jumps over the lazy dog. 0123456789
-          </p>
-          <p className="font-serif text-lg font-medium">
-            The quick brown fox jumps over the lazy dog. 0123456789
-          </p>
-        </div>
-      </div>
+      <p className="mt-16 text-sm text-ink/50">
+        Accounts are set up by an admin — there&apos;s no public sign-up.
+      </p>
     </div>
   );
 }

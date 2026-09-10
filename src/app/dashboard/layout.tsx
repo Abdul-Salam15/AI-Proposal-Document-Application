@@ -20,24 +20,36 @@ export default async function DashboardLayout({
         <div className="flex flex-col gap-8">
           <div>
             <p className="text-sm font-medium">AI Proposal</p>
-            <p className="mt-1 text-xs text-paper/60">Document Application</p>
+            <p className="mt-1 text-xs text-paper/60">Generator</p>
           </div>
 
           <nav className="flex flex-col gap-1 text-sm">
-            <Link href="/dashboard" className="px-1 py-1 text-paper/80">
+            <Link
+              href="/dashboard"
+              className="px-1 py-1 text-paper/80 transition-colors hover:text-paper"
+            >
               Proposals
             </Link>
             {profile?.role === "salesperson" && (
-              <Link href="/dashboard/proposals/new" className="px-1 py-1 text-paper/80">
+              <Link
+                href="/dashboard/proposals/new"
+                className="px-1 py-1 text-paper/80 transition-colors hover:text-paper"
+              >
                 New proposal
               </Link>
             )}
             {profile?.role === "admin" && (
               <>
-                <Link href="/dashboard/admin/audit-log" className="px-1 py-1 text-paper/80">
+                <Link
+                  href="/dashboard/admin/audit-log"
+                  className="px-1 py-1 text-paper/80 transition-colors hover:text-paper"
+                >
                   Audit log
                 </Link>
-                <Link href="/dashboard/admin/users" className="px-1 py-1 text-paper/80">
+                <Link
+                  href="/dashboard/admin/users"
+                  className="px-1 py-1 text-paper/80 transition-colors hover:text-paper"
+                >
                   Users
                 </Link>
               </>
@@ -61,7 +73,7 @@ export default async function DashboardLayout({
           <form action={signOutAction}>
             <button
               type="submit"
-              className="w-full border border-paper/30 px-3 py-2 text-left text-sm text-paper"
+              className="w-full border border-paper/30 px-3 py-2 text-left text-sm text-paper transition-colors hover:border-paper/60 hover:bg-paper/10"
             >
               Sign out
             </button>

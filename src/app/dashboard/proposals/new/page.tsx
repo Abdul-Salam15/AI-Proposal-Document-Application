@@ -18,7 +18,7 @@ export default async function NewProposalPage() {
         </Link>
         <h1 className="mt-1 text-2xl font-medium">New proposal</h1>
       </div>
-      <IntakeForm />
+      <IntakeForm salespersonName={profile.name?.trim() || profile.email} />
     </div>
   );
 }

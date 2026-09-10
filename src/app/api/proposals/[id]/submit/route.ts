@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
 import { writeAuditLog } from "@/lib/audit-log";
 import { getSession } from "@/lib/auth";
+import { getAdmins } from "@/lib/notifications/recipients";
+import { sendNotificationEmail } from "@/lib/notifications/send-email";
+import { buildSubmittedForApprovalEmail } from "@/lib/notifications/templates";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import type { Proposal } from "@/lib/types";
 
 // POST /api/proposals/[id]/submit — Section 12: locks the proposal from
 // further edits; status -> pending_approval. Salesperson (owner) only.
 // Section 6 step 4.
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
@@ -69,6 +74,23 @@ export async function POST(
     targetId: id,
     metadata: {},
   });
+
+  const origin = new URL(request.url).origin;
+  const service = createServiceClient();
+  const reviewers = await getAdmins(service);
+  const { subject, body } = buildSubmittedForApprovalEmail(updated as Proposal, origin);
+  await Promise.all(
+    reviewers.map((reviewer) =>
+      sendNotificationEmail({
+        to: reviewer.email,
+        subject,
+        text: body,
+        actorId: user.id,
+        notificationType: "submitted_for_approval",
+        targetId: id,
+      })
+    )
+  );
 
   return NextResponse.json({ proposal: updated });
 }

@@ -34,5 +34,15 @@ export async function authorizeProposalOwner(proposalId: string): Promise<Author
     return { ok: false, status: 403, error: "You do not own this proposal." };
   }
 
+  // Section 11.2 (as extended): the owner can generate/regenerate while
+  // draft or pending_approval — RLS's proposals_update_owner policy allows
+  // the same two statuses, and writing new content while pending_approval
+  // auto-reverts status to draft (see generate-section.ts). Anything past
+  // that (approved/rejected/sent/failed) stays fully locked from content
+  // changes.
+  if (proposal.status !== "draft" && proposal.status !== "pending_approval") {
+    return { ok: false, status: 409, error: "This proposal is not open for editing." };
+  }
+
   return { ok: true, userId: user.id, supabase, proposal: proposal as Proposal };
 }

@@ -6,16 +6,16 @@ import { INTAKE_FIELDS, type IntakeFieldKey } from "@/lib/intake-fields";
 
 type FormState = Record<IntakeFieldKey, string>;
 
-function buildInitialState(): FormState {
+function buildInitialState(salespersonName: string): FormState {
   return INTAKE_FIELDS.reduce((state, field) => {
-    state[field.key] = "";
+    state[field.key] = field.key === "salesperson_name" ? salespersonName : "";
     return state;
   }, {} as FormState);
 }
 
-export default function IntakeForm() {
+export default function IntakeForm({ salespersonName }: { salespersonName: string }) {
   const router = useRouter();
-  const [values, setValues] = useState<FormState>(buildInitialState);
+  const [values, setValues] = useState<FormState>(() => buildInitialState(salespersonName));
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -59,38 +59,54 @@ export default function IntakeForm() {
       noValidate
       className="flex max-w-2xl flex-col gap-5"
     >
-      {INTAKE_FIELDS.map((field) => (
-        <label key={field.key} className="flex flex-col gap-1 text-sm">
-          {field.label}
-          {field.type === "textarea" ? (
-            <textarea
-              required={field.required}
-              rows={3}
-              value={values[field.key]}
-              onChange={(event) => handleChange(field.key, event.target.value)}
-              className="border border-rule bg-paper px-3 py-2 text-sm text-ink outline-none focus:border-slate"
-            />
-          ) : (
+      {INTAKE_FIELDS.map((field) =>
+        field.editable === false ? (
+          <label key={field.key} className="flex flex-col gap-1 text-sm">
+            {field.label}
             <input
               type={field.type}
-              required={field.required}
               value={values[field.key]}
-              onChange={(event) => handleChange(field.key, event.target.value)}
-              className="border border-rule bg-paper px-3 py-2 text-sm text-ink outline-none focus:border-slate"
+              disabled
+              readOnly
+              className="border border-rule bg-paper-shade px-3 py-2 text-sm text-ink/60"
             />
-          )}
-          {field.helpText && (
-            <span className="text-xs text-ink/50">{field.helpText}</span>
-          )}
-        </label>
-      ))}
+            {field.helpText && (
+              <span className="text-xs text-ink/50">{field.helpText}</span>
+            )}
+          </label>
+        ) : (
+          <label key={field.key} className="flex flex-col gap-1 text-sm">
+            {field.label}
+            {field.type === "textarea" ? (
+              <textarea
+                required={field.required}
+                rows={3}
+                value={values[field.key]}
+                onChange={(event) => handleChange(field.key, event.target.value)}
+                className="border border-rule bg-paper px-3 py-2 text-sm text-ink outline-none transition-colors hover:border-ink/30 focus:border-slate"
+              />
+            ) : (
+              <input
+                type={field.type}
+                required={field.required}
+                value={values[field.key]}
+                onChange={(event) => handleChange(field.key, event.target.value)}
+                className="border border-rule bg-paper px-3 py-2 text-sm text-ink outline-none transition-colors hover:border-ink/30 focus:border-slate"
+              />
+            )}
+            {field.helpText && (
+              <span className="text-xs text-ink/50">{field.helpText}</span>
+            )}
+          </label>
+        )
+      )}
 
       {error && <p className="text-sm text-oxblood">{error}</p>}
 
       <button
         type="submit"
         disabled={isSubmitting}
-        className="mt-2 w-fit bg-ink px-4 py-2 text-sm font-medium text-paper transition-opacity disabled:opacity-50"
+        className="mt-2 w-fit bg-ink px-4 py-2 text-sm font-medium text-paper transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
       >
         {isSubmitting ? "Creating…" : "Create proposal"}
       </button>

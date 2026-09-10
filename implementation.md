@@ -37,8 +37,7 @@ user's role. Role checks are enforced on the backend, not just hidden in the UI.
 | Role | Permissions |
 |---|---|
 | **Salesperson** | Create proposals, edit/regenerate individual sections, submit for approval, view own proposals |
-| **Approver** | View proposals pending approval, approve or reject with a comment, cannot edit proposal content |
-| **Admin** | All of the above, plus: view all proposals regardless of owner, view the full audit log, manage user roles, view failure/error events, and override a stuck status if needed |
+| **Admin** | View all proposals regardless of owner, approve or reject a proposal pending approval with a comment (cannot edit proposal content), view the full audit log, manage user roles, view failure/error events, and override a stuck status if needed |
 
 ---
 
@@ -46,7 +45,7 @@ user's role. Role checks are enforced on the backend, not just hidden in the UI.
 
 ### `users`
 ```
-id, email, password_hash, name, role (salesperson | approver | admin), created_at
+id, email, password_hash, name, role (salesperson | admin), created_at
 ```
 
 ### `proposals`
@@ -143,7 +142,7 @@ directly supporting Testing Scenario 2 (no unsupported assumptions going unnotic
 3. Review        -> Salesperson reviews, edits, or regenerates individual sections
                      (regeneration only replaces the targeted section)
 4. Submission    -> Salesperson submits proposal; status -> pending_approval
-5. Approval      -> Approver reviews and approves or rejects with comment;
+5. Approval      -> Admin reviews and approves or rejects with comment;
                      recorded in `approvals` and `audit_log`
                      status -> approved or rejected
                      (No client delivery occurs before this step)
@@ -281,15 +280,15 @@ route; Supabase RLS provides a second layer of enforcement at the database level
 |---|---|---|
 | `POST /api/auth/login` | Any | Authenticate via Supabase Auth |
 | `POST /api/proposals` | Salesperson | Create a new proposal from intake fields; status set to `draft` |
-| `GET /api/proposals` | Any (filtered) | List proposals — salesperson sees own only, approver sees `pending_approval`, admin sees all |
-| `GET /api/proposals/[id]` | Owner, Approver, or Admin | Fetch a single proposal's full content and version history |
+| `GET /api/proposals` | Any (filtered) | List proposals — salesperson sees own only, admin sees all |
+| `GET /api/proposals/[id]` | Owner or Admin | Fetch a single proposal's full content and version history |
 | `PATCH /api/proposals/[id]` | Salesperson (owner) | Manually edit a section's content directly (no API call) |
 | `POST /api/proposals/[id]/generate` | Salesperson (owner) | First-time generation of all sections (or a single section, via a `section` param) — writes to `content` and `proposal_versions` |
 | `POST /api/proposals/[id]/regenerate-section` | Salesperson (owner) | Regenerate one section only; enforces the regeneration cap (Section 11.1) and writes a new `proposal_versions` row |
 | `POST /api/proposals/[id]/submit` | Salesperson (owner) | Locks the proposal from further edits; status -> `pending_approval` |
-| `POST /api/proposals/[id]/approve` | Approver or Admin | Records decision in `approvals`; status -> `approved` or `rejected` |
-| `POST /api/proposals/[id]/export` | Salesperson, Approver, or Admin (only after `approved`) | Renders the proposal to a hosted page + PDF; produces the `{{proposal_link}}` value |
-| `POST /api/proposals/[id]/send` | Salesperson, Approver, or Admin (only after `export` succeeds) | Sends the client email using the client email template; status -> `sent` or `failed` |
+| `POST /api/proposals/[id]/approve` | Admin | Records decision in `approvals`; status -> `approved` or `rejected` |
+| `POST /api/proposals/[id]/export` | Salesperson or Admin (only after `approved`) | Renders the proposal to a hosted page + PDF; produces the `{{proposal_link}}` value |
+| `POST /api/proposals/[id]/send` | Salesperson or Admin (only after `export` succeeds) | Sends the client email using the client email template; status -> `sent` or `failed` |
 | `GET /api/audit-log` | Admin only | Full audit trail across all proposals and users |
 | `GET /api/users` | Admin only | List users and their roles (for role management) |
 | `PATCH /api/users/[id]` | Admin only | Change a user's role |
@@ -319,7 +318,7 @@ to the logged-in Supabase user; `role` is read from the `users` table via a help
 
 | Operation | Policy |
 |---|---|
-| `SELECT` | Allowed if `owner_id = auth.uid()` **OR** `current_user_role() IN ('approver','admin')`. Approvers can view because they need to review before deciding; the API layer still filters an approver's list view to `pending_approval` only, RLS just permits the read. |
+| `SELECT` | Allowed if `owner_id = auth.uid()` **OR** `current_user_role() = 'admin'`. |
 | `INSERT` | Allowed if `current_user_role() = 'salesperson'` **AND** `owner_id = auth.uid()` |
 | `UPDATE` | Allowed if `owner_id = auth.uid()` **AND** `status IN ('draft')` — enforces the "locked once submitted" rule from Section 11.2 at the DB level, not just in application code. Admins get a separate `UPDATE` policy with no status restriction, to support the "override a stuck status" capability from Section 3. |
 | `DELETE` | Not permitted for any role in production. Proposals are retained for audit purposes; a `status` change (e.g. to a `cancelled` state) is used instead of deletion if needed. |
@@ -328,7 +327,7 @@ to the logged-in Supabase user; `role` is read from the `users` table via a help
 
 | Operation | Policy |
 |---|---|
-| `SELECT` | Allowed if the parent proposal's owner is `auth.uid()`, or `current_user_role() IN ('approver','admin')` |
+| `SELECT` | Allowed if the parent proposal's owner is `auth.uid()`, or `current_user_role() = 'admin'` |
 | `INSERT` | Allowed only via the server-side `generate` / `regenerate-section` routes (service role), never directly from the client |
 | `UPDATE` / `DELETE` | Not permitted — versions are append-only, preserving full history |
 
@@ -336,8 +335,8 @@ to the logged-in Supabase user; `role` is read from the `users` table via a help
 
 | Operation | Policy |
 |---|---|
-| `SELECT` | Allowed if the parent proposal's owner is `auth.uid()`, or `current_user_role() IN ('approver','admin')` |
-| `INSERT` | Allowed only if `current_user_role() IN ('approver','admin')` **AND** `approver_id = auth.uid()` |
+| `SELECT` | Allowed if the parent proposal's owner is `auth.uid()`, or `current_user_role() = 'admin'` |
+| `INSERT` | Allowed only if `current_user_role() = 'admin'` **AND** `approver_id = auth.uid()` |
 | `UPDATE` / `DELETE` | Not permitted — an approval decision is a permanent record; a reversal is a new row, not an edit |
 
 ### `audit_log` table

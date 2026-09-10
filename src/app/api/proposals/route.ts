@@ -27,6 +27,7 @@ export async function POST(request: Request) {
   const record = body as Record<string, unknown>;
 
   for (const field of INTAKE_FIELDS) {
+    if (field.editable === false) continue;
     const value = record[field.key];
     if (field.required && (typeof value !== "string" || !value.trim())) {
       return NextResponse.json(
@@ -36,8 +37,16 @@ export async function POST(request: Request) {
     }
   }
 
-  const insertPayload: Record<string, string | null> = { owner_id: user.id };
+  // salesperson_name is not client-editable (editable: false in
+  // intake-fields.ts) — always the owning account's own name, never
+  // whatever a request body claims, so it can't be spoofed via a direct
+  // API call either.
+  const insertPayload: Record<string, string | null> = {
+    owner_id: user.id,
+    salesperson_name: profile.name?.trim() || profile.email,
+  };
   for (const field of INTAKE_FIELDS) {
+    if (field.editable === false) continue;
     const value = record[field.key];
     insertPayload[field.key] = typeof value === "string" && value.trim() ? value : null;
   }
@@ -57,7 +66,7 @@ export async function POST(request: Request) {
 }
 
 // GET /api/proposals — Section 12: list proposals, filtered by role.
-// Salesperson sees own only, approver sees pending_approval, admin sees all.
+// Salesperson sees own only, admin sees all.
 export async function GET() {
   const { user, profile } = await getSession();
 
@@ -73,8 +82,6 @@ export async function GET() {
 
   if (profile.role === "salesperson") {
     query = query.eq("owner_id", user.id);
-  } else if (profile.role === "approver") {
-    query = query.eq("status", "pending_approval");
   }
   // admin: no filter — sees all.
 

@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { writeAuditLog } from "@/lib/audit-log";
 import { getSession } from "@/lib/auth";
+import { getUserById } from "@/lib/notifications/recipients";
+import { sendNotificationEmail } from "@/lib/notifications/send-email";
+import { buildDecisionEmail } from "@/lib/notifications/templates";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import type { Proposal } from "@/lib/types";
 
 const DECISIONS = ["approved", "rejected"] as const;
 type Decision = (typeof DECISIONS)[number];
@@ -12,7 +16,7 @@ function isDecision(value: unknown): value is Decision {
 }
 
 // POST /api/proposals/[id]/approve — Section 12: records the decision in
-// `approvals`; status -> approved or rejected. Approver or admin only.
+// `approvals`; status -> approved or rejected. Admin only.
 // Section 6 step 5 — no client delivery happens here (Section 6: "No client
 // delivery occurs before this step"). Section 4's approval_decision enum
 // only has approved/rejected — no other states are introduced.
@@ -27,9 +31,9 @@ export async function POST(
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  if (profile.role !== "approver" && profile.role !== "admin") {
+  if (profile.role !== "admin") {
     return NextResponse.json(
-      { error: "Only an approver or admin can record an approval decision." },
+      { error: "Only an admin can record an approval decision." },
       { status: 403 }
     );
   }
@@ -63,8 +67,8 @@ export async function POST(
     );
   }
 
-  // approvals INSERT is allowed for the approver's own session (Section 13:
-  // current_user_role() in ('approver','admin') and approver_id = auth.uid()).
+  // approvals INSERT is allowed for the admin's own session (Section 13:
+  // current_user_role() = 'admin' and approver_id = auth.uid()).
   const { error: approvalError } = await supabase.from("approvals").insert({
     proposal_id: id,
     approver_id: user.id,
@@ -88,10 +92,10 @@ export async function POST(
     );
   }
 
-  // Section 13 gives approvers no direct UPDATE policy on `proposals` — the
-  // status transition only happens through this validated route, via the
-  // service client, the same pattern already used for proposal_versions
-  // and audit_log writes.
+  // Service client, the same pattern already used for proposal_versions and
+  // audit_log writes — keeps this status transition gated by this route's
+  // own validation (decision, pending_approval check) rather than relying
+  // solely on RLS's admin override policy.
   const service = createServiceClient();
   const { data: updated, error: updateError } = await service
     .from("proposals")
@@ -122,6 +126,20 @@ export async function POST(
     targetId: id,
     metadata: { comment },
   });
+
+  const owner = await getUserById(service, proposal.owner_id);
+  if (owner) {
+    const origin = new URL(request.url).origin;
+    const { subject, body } = buildDecisionEmail(updated as Proposal, decision, comment, origin);
+    await sendNotificationEmail({
+      to: owner.email,
+      subject,
+      text: body,
+      actorId: user.id,
+      notificationType: "decision",
+      targetId: id,
+    });
+  }
 
   return NextResponse.json({
     proposal: updated,

@@ -11,8 +11,11 @@ function getClient(): Anthropic {
   return client;
 }
 
-const MODEL = "claude-opus-5";
-const MAX_TOKENS = 1024;
+const MODEL = "claude-haiku-4-5-20251001";
+// Output guardrail: proposal sections are meant to be tight paragraphs, not
+// essays — this caps runaway generation both at the token level (hard stop)
+// and via an explicit length instruction in the prompt below (soft target).
+const MAX_TOKENS = 400;
 
 // Section 11.1: "Truncate/summarize long supporting material before
 // sending it as context, since larger prompts cost more per call."
@@ -47,12 +50,11 @@ export async function callClaudeForSection(params: {
 Proposal context:
 ${params.contextText}${supportingBlock}
 
-Write only this section's content, as plain prose suitable for a client-facing proposal document. Do not include a heading or label.`;
+Write only this section's content, as plain prose suitable for a client-facing proposal document: full sentences, no Markdown formatting (no #, *, -, or other markup), no heading or label of any kind. Never respond with just a title — write the complete paragraph. Keep it tight: 3-5 sentences, no more than about 120 words — synthesize, don't restate the full context.`;
 
   const response = await getClient().messages.create({
     model: MODEL,
     max_tokens: MAX_TOKENS,
-    output_config: { effort: "low" },
     messages: [{ role: "user", content: prompt }],
   });
 
@@ -61,6 +63,20 @@ Write only this section's content, as plain prose suitable for a client-facing p
     .map((block) => block.text)
     .join("\n")
     .trim();
+
+  // Guards against a degenerate response (e.g. a bare "# Project Scope"
+  // heading with no actual prose) making it into proposal content as if it
+  // were a normal, usable section — a model ignoring the "no heading, full
+  // paragraph" instruction above is a generation failure, not valid output,
+  // and should surface as one (section_generation_failed) rather than get
+  // silently saved and, worse, cached indefinitely.
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+  const isBareHeading = text.split("\n").filter((line) => line.trim()).length <= 1 && /^#{1,6}\s/.test(text);
+  if (!text || wordCount < 8 || isBareHeading) {
+    throw new Error(
+      `Claude returned an unusable response for the ${params.section.title} section (too short or just a heading) — try regenerating.`
+    );
+  }
 
   return {
     text,
