@@ -99,16 +99,12 @@ export async function generateSection(
   // API). Ordered oldest-first so, once the limit is hit, the oldest of
   // these is exactly the one that determines when a slot next frees up.
   const windowStart = new Date(Date.now() - REGENERATION_WINDOW_MS).toISOString();
-  const { data: recentCalls, error: countError } = await service
+  const { data: recentRows, error: countError } = await service
     .from("proposal_versions")
-    .select("created_at")
+    .select("created_at, content")
     .eq("proposal_id", proposal.id)
     .eq("section_name", sectionKey)
     .eq("generated_by", "ai")
-    // proposal_versions.content is jsonb; a [NEEDS INPUT: ...] sentinel is
-    // stored as a jsonb string scalar, whose ::text cast is its quoted JSON
-    // representation (e.g. '"[NEEDS INPUT: foo]"') — hence the leading %.
-    .not("content::text", "like", '%"[NEEDS INPUT:%')
     .gte("created_at", windowStart)
     .order("created_at", { ascending: true });
 
@@ -116,8 +112,16 @@ export async function generateSection(
     throw new Error(countError.message);
   }
 
-  if ((recentCalls?.length ?? 0) >= REGENERATION_LIMIT) {
-    const oldest = recentCalls![0];
+  // [NEEDS INPUT: ...] rows never called the API, so they don't count
+  // against the rate limit — filtered here rather than via a DB-side
+  // jsonb-to-text cast in the query, which PostgREST doesn't apply
+  // reliably (surfaces as "operator does not exist: jsonb ~~ unknown").
+  const recentCalls = (recentRows ?? []).filter(
+    (row) => !(typeof row.content === "string" && row.content.startsWith("[NEEDS INPUT:"))
+  );
+
+  if (recentCalls.length >= REGENERATION_LIMIT) {
+    const oldest = recentCalls[0];
     const availableAt = new Date(oldest.created_at).getTime() + REGENERATION_WINDOW_MS;
     const waitMinutes = Math.max(1, Math.ceil((availableAt - Date.now()) / 60000));
     return { outcome: "rate_limited", waitMinutes };
