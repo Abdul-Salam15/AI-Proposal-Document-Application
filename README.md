@@ -2,6 +2,12 @@
 
 **Live app:** [ai-proposal-generator-iota.vercel.app](https://ai-proposal-generator-iota.vercel.app)
 
+**One pager:** [Google Doc](https://docs.google.com/document/d/1Z8L1gRWC8JkBs08ozbJCKfT35NXXkHpJHRsvnsNmCZ4/edit?usp=sharing)
+
+**Generated proposal sample:** [PDF](https://kbckcoqfnxqohzgfzmvc.supabase.co/storage/v1/object/public/proposal-pdfs/1c707521-edfa-47a1-a80a-3cc8c474b097.pdf)
+
+**Video walkthrough:** [Loom](https://www.loom.com/share/3f2e84cdbced4cf488b0499c6d628fd9)
+
 An internal tool that turns discovery-call notes into a client-ready proposal. A salesperson
 fills in an intake form, Claude drafts each section of the proposal, the salesperson reviews
 and edits before submitting, an admin signs off, and only then is the proposal exported and

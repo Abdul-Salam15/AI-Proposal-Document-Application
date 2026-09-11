@@ -20,7 +20,7 @@ function getClient(): Anthropic {
   return client;
 }
 
-const MODEL = "claude-haiku-4-5-20251001";
+const MODEL = "claude-sonnet-5";
 // Output guardrail: proposal sections are meant to be tight paragraphs, not
 // essays — this caps runaway generation both at the token level (hard stop)
 // and via an explicit length instruction in the prompt below (soft target).
