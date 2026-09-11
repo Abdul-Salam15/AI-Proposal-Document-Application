@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { writeAuditLog } from "@/lib/audit-log";
 import { getSession } from "@/lib/auth";
 import { isValidEmail } from "@/lib/intake-fields";
+import { buildInviteEmail } from "@/lib/notifications/templates";
 import { createServiceClient } from "@/lib/supabase/service";
 import type { UserRole } from "@/lib/types";
 
@@ -19,10 +20,21 @@ function isRole(value: unknown): value is UserRole {
 // POST /api/users/invite — admin only. Provisioning a `users` row has never
 // been exposed through the app (auth.ts: "provisioning that row happens
 // outside this app") — this is that provisioning, done properly instead of
-// by hand in Supabase. Creates the auth user via the admin API (which emails
-// them an invite link) and its matching `public.users` row up front, with
-// the role already assigned, so the invited user has a working profile the
-// moment they accept.
+// by hand in Supabase. Creates the auth user via the admin API and its
+// matching `public.users` row up front, with the role already assigned, so
+// the invited user has a working profile the moment they accept.
+//
+// The invite email is sent by us, not by `inviteUserByEmail`'s built-in
+// mailer: that mailer's link points straight at Supabase's `/verify`
+// endpoint, which consumes the one-time token on the very first HTTP GET it
+// receives — including one from an email/chat link-scanner prefetching the
+// URL before the real recipient ever opens it, which is exactly what was
+// producing "invite link is invalid or expired" for people who hadn't
+// clicked anything yet. `generateLink` creates the same auth user but
+// returns a `hashed_token` without emailing anyone, so we can point the link
+// at our own `/accept-invite` page instead — a bot loads inert HTML there,
+// and the token is only spent when `verifyOtp` runs on actual form submit
+// (see accept-invite/page.tsx).
 export async function POST(request: Request) {
   const { user, profile } = await getSession();
 
@@ -54,11 +66,13 @@ export async function POST(request: Request) {
   const service = createServiceClient();
   const origin = new URL(request.url).origin;
 
-  const { data: invited, error: inviteError } = await service.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${origin}/accept-invite`,
+  const { data: invited, error: inviteError } = await service.auth.admin.generateLink({
+    type: "invite",
+    email,
+    options: { redirectTo: `${origin}/accept-invite` },
   });
 
-  if (inviteError || !invited.user) {
+  if (inviteError || !invited.user || !invited.properties?.hashed_token) {
     await writeAuditLog({
       actorId: user.id,
       action: "user_invite_failed",
@@ -94,15 +108,68 @@ export async function POST(request: Request) {
     );
   }
 
+  const acceptLink = `${origin}/accept-invite?token_hash=${invited.properties.hashed_token}&type=invite`;
+  const { subject, body: emailBody } = buildInviteEmail(acceptLink, role);
+
+  let mode: "brevo" | "manual" = "manual";
+
+  try {
+    const brevoApiKey = process.env.BREVO_API_KEY;
+
+    if (brevoApiKey) {
+      const fromEmail = process.env.BREVO_FROM_EMAIL;
+      if (!fromEmail) {
+        throw new Error("BREVO_FROM_EMAIL must be set to send email via Brevo.");
+      }
+
+      const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: {
+          "api-key": brevoApiKey,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          sender: { email: fromEmail },
+          to: [{ email }],
+          subject,
+          textContent: emailBody,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => null);
+        throw new Error(errorBody?.message ?? `Brevo request failed with status ${response.status}.`);
+      }
+      mode = "brevo";
+    }
+  } catch (err) {
+    // Brevo is configured but broken: there's no resend affordance in the
+    // admin UI yet, so a half-provisioned user the invite email never
+    // reached would be permanently stuck. Roll back the same way the
+    // profile-insert failure above does, rather than leaving it orphaned.
+    await service.auth.admin.deleteUser(invited.user.id);
+
+    const message = err instanceof Error ? err.message : "Sending the invite email failed.";
+    await writeAuditLog({
+      actorId: user.id,
+      action: "user_invite_failed",
+      targetId: invited.user.id,
+      metadata: { email, role, error: message },
+    });
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+
   const logged = await writeAuditLog({
     actorId: user.id,
     action: "user_invited",
     targetId: invited.user.id,
-    metadata: { email, role },
+    metadata: { email, role, mode },
   });
 
   return NextResponse.json({
     user: profileRow,
+    invite: { mode, acceptLink, email: { subject, body: emailBody } },
     ...(logged ? {} : { auditLogWarning: "The invite was sent, but the audit log entry failed to record. Contact an admin." }),
   });
 }

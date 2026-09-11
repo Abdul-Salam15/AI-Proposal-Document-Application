@@ -235,6 +235,7 @@ function InviteUserForm({ onInvited }: { onInvited: (user: UserRow) => void }) {
   const [error, setError] = useState<string | null>(null);
   const [auditWarning, setAuditWarning] = useState<string | null>(null);
   const [successEmail, setSuccessEmail] = useState<string | null>(null);
+  const [manualAcceptLink, setManualAcceptLink] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -244,6 +245,7 @@ function InviteUserForm({ onInvited }: { onInvited: (user: UserRow) => void }) {
     setError(null);
     setAuditWarning(null);
     setSuccessEmail(null);
+    setManualAcceptLink(null);
 
     try {
       const response = await fetch("/api/users/invite", {
@@ -264,6 +266,9 @@ function InviteUserForm({ onInvited }: { onInvited: (user: UserRow) => void }) {
 
       onInvited(data.user as UserRow);
       setSuccessEmail(email);
+      if (data.invite?.mode === "manual") {
+        setManualAcceptLink(data.invite.acceptLink as string);
+      }
       setEmail("");
       setName("");
       setRole(ROLES[0]);
@@ -327,7 +332,21 @@ function InviteUserForm({ onInvited }: { onInvited: (user: UserRow) => void }) {
       </div>
       {error && <p className="text-oxblood">{error}</p>}
       {auditWarning && <p className="text-oxblood">{auditWarning}</p>}
-      {successEmail && <p className="text-slate">Invite sent to {successEmail}.</p>}
+      {successEmail && !manualAcceptLink && <p className="text-slate">Invite sent to {successEmail}.</p>}
+      {successEmail && manualAcceptLink && (
+        <div className="flex flex-col gap-1 border border-rule bg-paper p-2 text-xs">
+          <p className="text-ink/70">
+            Email delivery isn&apos;t configured — send this link to {successEmail} yourself:
+          </p>
+          <input
+            type="text"
+            readOnly
+            value={manualAcceptLink}
+            onFocus={(event) => event.currentTarget.select()}
+            className="border border-rule bg-paper-shade px-2 py-1 text-ink outline-none"
+          />
+        </div>
+      )}
     </form>
   );
 }

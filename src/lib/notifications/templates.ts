@@ -109,6 +109,17 @@ export function buildRoleChangedEmail(
   };
 }
 
+export function buildInviteEmail(acceptLink: string, role: UserRole) {
+  return {
+    subject: "You've been invited to AI Proposal Generator",
+    body: [
+      `You've been invited to join AI Proposal Generator as a ${role}.`,
+      "",
+      `Set your password to get started: ${acceptLink}`,
+    ].join("\n"),
+  };
+}
+
 export function buildRoleChangeConfirmationEmail(
   targetEmail: string,
   oldRole: UserRole,
