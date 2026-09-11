@@ -86,6 +86,17 @@ export function isValidEmail(value: string): boolean {
   return EMAIL_REGEX.test(value.trim());
 }
 
+// Local (not UTC) calendar date, so "today" lines up with the date the
+// person filling out the form is looking at rather than shifting a day
+// around midnight UTC.
+export function todayDateString(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 // Shared by every write path (POST /api/proposals, the intake-edit branch of
 // PATCH /api/proposals/[id], and the submit-for-approval gate) plus both
 // intake form components, so "required" and "must look like an email" can't
@@ -98,6 +109,9 @@ export function validateIntakeValue(field: IntakeFieldConfig, rawValue: string):
   }
   if (field.type === "email" && value && !isValidEmail(value)) {
     return `${field.label} must be a valid email address.`;
+  }
+  if (field.type === "date" && value && value > todayDateString()) {
+    return `${field.label} cannot be later than today.`;
   }
   return null;
 }

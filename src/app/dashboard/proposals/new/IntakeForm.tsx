@@ -2,7 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { INTAKE_FIELDS, validateIntakeValue, type IntakeFieldKey } from "@/lib/intake-fields";
+import {
+  INTAKE_FIELDS,
+  todayDateString,
+  validateIntakeValue,
+  type IntakeFieldKey,
+} from "@/lib/intake-fields";
 
 type FormState = Record<IntakeFieldKey, string>;
 
@@ -73,6 +78,7 @@ export default function IntakeForm({ salespersonName }: { salespersonName: strin
         field.editable === false ? (
           <label key={field.key} className="flex flex-col gap-1 text-sm">
             {field.label}
+            {field.required && <span className="text-oxblood"> *</span>}
             <input
               type={field.type}
               value={values[field.key]}
@@ -87,6 +93,7 @@ export default function IntakeForm({ salespersonName }: { salespersonName: strin
         ) : (
           <label key={field.key} className="flex flex-col gap-1 text-sm">
             {field.label}
+            {field.required && <span className="text-oxblood"> *</span>}
             {field.type === "textarea" ? (
               <textarea
                 required={field.required}
@@ -99,6 +106,7 @@ export default function IntakeForm({ salespersonName }: { salespersonName: strin
               <input
                 type={field.type}
                 required={field.required}
+                max={field.type === "date" ? todayDateString() : undefined}
                 value={values[field.key]}
                 onChange={(event) => handleChange(field.key, event.target.value)}
                 className="border border-rule bg-paper px-3 py-2 text-sm text-ink outline-none transition-colors hover:border-ink/30 focus:border-slate"

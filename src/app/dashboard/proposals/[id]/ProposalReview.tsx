@@ -3,7 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { SECTIONS, type SectionConfig, type SectionContent, type SectionKey } from "@/lib/generation/sections";
-import { INTAKE_FIELDS, validateIntakeValue, type IntakeFieldKey } from "@/lib/intake-fields";
+import {
+  INTAKE_FIELDS,
+  todayDateString,
+  validateIntakeValue,
+  type IntakeFieldKey,
+} from "@/lib/intake-fields";
 import type { Approval, Proposal, ProposalStatus } from "@/lib/types";
 
 // Section 5's note: recommended_approach and deliverables are AI-derived,
@@ -418,6 +423,7 @@ function IntakeDetailsPanel({
             {INTAKE_FIELDS.filter((field) => field.editable !== false).map((field) => (
               <label key={field.key} className="flex flex-col gap-1">
                 {field.label}
+                {field.required && <span className="text-oxblood"> *</span>}
                 {field.type === "textarea" ? (
                   <textarea
                     value={draft[field.key]}
@@ -430,6 +436,7 @@ function IntakeDetailsPanel({
                 ) : (
                   <input
                     type={field.type}
+                    max={field.type === "date" ? todayDateString() : undefined}
                     value={draft[field.key]}
                     onChange={(event) =>
                       setDraft((prev) => ({ ...prev, [field.key]: event.target.value }))
