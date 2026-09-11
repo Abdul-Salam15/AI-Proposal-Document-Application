@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { writeAuditLog } from "@/lib/audit-log";
 import { getSession } from "@/lib/auth";
+import { INTAKE_FIELDS, validateIntakeValue } from "@/lib/intake-fields";
 import { getAdmins } from "@/lib/notifications/recipients";
 import { sendNotificationEmail } from "@/lib/notifications/send-email";
 import { buildSubmittedForApprovalEmail } from "@/lib/notifications/templates";
@@ -49,6 +50,21 @@ export async function POST(
       { error: "Only a draft proposal can be submitted for approval." },
       { status: 409 }
     );
+  }
+
+  // Gate the approval request itself: a malformed client_email (or any
+  // other required intake field left blank, however that happened) must be
+  // caught here, before an admin ever reviews it — not just later at the
+  // final send step (send/route.ts), by which point it's already approved.
+  for (const field of INTAKE_FIELDS) {
+    const value = proposal[field.key as keyof Proposal];
+    const validationError = validateIntakeValue(field, typeof value === "string" ? value : "");
+    if (validationError) {
+      return NextResponse.json(
+        { error: `${validationError} Fix it before submitting for approval.` },
+        { status: 400 }
+      );
+    }
   }
 
   const { data: updated, error: updateError } = await supabase

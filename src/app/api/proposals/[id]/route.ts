@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { writeAuditLog } from "@/lib/audit-log";
 import { getSession } from "@/lib/auth";
 import { isSectionKey, SECTIONS } from "@/lib/generation/sections";
-import { INTAKE_FIELDS, type IntakeFieldKey } from "@/lib/intake-fields";
+import { INTAKE_FIELDS, validateIntakeValue, type IntakeFieldKey } from "@/lib/intake-fields";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -294,21 +294,19 @@ async function handleIntakeEdit(params: {
     if (typeof value !== "string") {
       return NextResponse.json({ error: `${key} must be a string.` }, { status: 400 });
     }
+    // Same required + format rules as proposal creation (Section 12's
+    // POST /api/proposals) — an edit can't leave a required field blank, or
+    // an email field malformed, any more than creation could.
+    const validationError = validateIntakeValue(fieldConfig!, value);
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 });
+    }
     updates[key] = value.trim() ? value : null;
   }
 
   const editedKeys = Object.keys(updates) as IntakeFieldKey[];
   if (editedKeys.length === 0) {
     return NextResponse.json({ error: "No fields to update." }, { status: 400 });
-  }
-
-  // Same required-field rule as proposal creation (Section 12's
-  // POST /api/proposals) — an edit can't leave a required field blank any
-  // more than creation could.
-  for (const field of INTAKE_FIELDS) {
-    if (field.required && editedKeys.includes(field.key) && !updates[field.key]) {
-      return NextResponse.json({ error: `${field.label} is required.` }, { status: 400 });
-    }
   }
 
   // Auto-revert on edit: matches the section-edit branch above and

@@ -430,9 +430,9 @@ re-drafted).
 
 ## 15. Deliverables Checklist (from PRD)
 
-- [ ] Application link
-- [ ] Generated proposal sample
-- [ ] Testing evidence table (all 7 scenarios)
+- [x] Application link: https://ai-proposal-generator-iota.vercel.app
+- [x] Generated proposal sample: https://kbckcoqfnxqohzgfzmvc.supabase.co/storage/v1/object/public/proposal-pdfs/1c707521-edfa-47a1-a80a-3cc8c474b097.pdf
+- [x] Testing evidence table (all 7 scenarios)
 - [ ] Video walkthrough (Loom)
-- [ ] Reflection sheet
-- [ ] One-page documentation
+- [x] Reflection sheet
+- [x] One-page documentation

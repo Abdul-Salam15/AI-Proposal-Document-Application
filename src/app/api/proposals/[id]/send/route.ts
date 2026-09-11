@@ -2,17 +2,13 @@ import { NextResponse } from "next/server";
 import { writeAuditLog } from "@/lib/audit-log";
 import { buildClientEmail } from "@/lib/delivery/email-template";
 import { getSession } from "@/lib/auth";
+import { isValidEmail } from "@/lib/intake-fields";
 import { getUserById } from "@/lib/notifications/recipients";
 import { sendNotificationEmail } from "@/lib/notifications/send-email";
 import { buildDeliveryFailedEmail, buildSentConfirmationEmail } from "@/lib/notifications/templates";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import type { Proposal } from "@/lib/types";
-
-// Section 11.2: "Malformed or missing client_email should be validated
-// before the delivery step is attempted, rather than relying on the email
-// provider to reject it."
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // POST /api/proposals/[id]/send — Section 12: sends the client email using
 // the client email template; status -> sent or failed. Salesperson,
@@ -54,7 +50,7 @@ export async function POST(
 
   const service = createServiceClient();
 
-  if (!proposal.client_email || !EMAIL_REGEX.test(proposal.client_email)) {
+  if (!proposal.client_email || !isValidEmail(proposal.client_email)) {
     await service
       .from("proposals")
       .update({ status: "failed", updated_at: new Date().toISOString() })

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { writeAuditLog } from "@/lib/audit-log";
 import { getSession } from "@/lib/auth";
+import { isValidEmail } from "@/lib/intake-fields";
 import { createServiceClient } from "@/lib/supabase/service";
 import type { UserRole } from "@/lib/types";
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ROLES: UserRole[] = ["salesperson", "admin"];
 
 // Vercel's default serverless timeout (10s) can be too tight once Supabase
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
   const name = body?.name;
   const role = body?.role;
 
-  if (typeof email !== "string" || !EMAIL_REGEX.test(email)) {
+  if (typeof email !== "string" || !isValidEmail(email)) {
     return NextResponse.json({ error: "A valid email is required." }, { status: 400 });
   }
 

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { INTAKE_FIELDS, type IntakeFieldKey } from "@/lib/intake-fields";
+import { INTAKE_FIELDS, validateIntakeValue, type IntakeFieldKey } from "@/lib/intake-fields";
 
 type FormState = Record<IntakeFieldKey, string>;
 
@@ -27,8 +27,18 @@ export default function IntakeForm({ salespersonName }: { salespersonName: strin
     event.preventDefault();
     if (isSubmitting) return;
 
-    setIsSubmitting(true);
     setError(null);
+
+    for (const field of INTAKE_FIELDS) {
+      if (field.editable === false) continue;
+      const validationError = validateIntakeValue(field, values[field.key]);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
 
     try {
       const response = await fetch("/api/proposals", {

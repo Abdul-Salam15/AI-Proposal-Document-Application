@@ -73,3 +73,31 @@ export const INTAKE_FIELDS: IntakeFieldConfig[] = [
       "Notes, prior proposals, or reference material. Used as context during generation.",
   },
 ];
+
+// Section 11.2: "Malformed or missing client_email should be validated
+// before the delivery step is attempted, rather than relying on the email
+// provider to reject it." Applied at every write path (create, edit,
+// submit-for-approval), not just the final send step, so a bad address is
+// caught before an admin ever reviews it — not just before the client email
+// physically goes out.
+export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function isValidEmail(value: string): boolean {
+  return EMAIL_REGEX.test(value.trim());
+}
+
+// Shared by every write path (POST /api/proposals, the intake-edit branch of
+// PATCH /api/proposals/[id], and the submit-for-approval gate) plus both
+// intake form components, so "required" and "must look like an email" can't
+// drift between them. Returns the first validation error for this field's
+// value, or null if it's valid.
+export function validateIntakeValue(field: IntakeFieldConfig, rawValue: string): string | null {
+  const value = rawValue.trim();
+  if (field.required && !value) {
+    return `${field.label} is required.`;
+  }
+  if (field.type === "email" && value && !isValidEmail(value)) {
+    return `${field.label} must be a valid email address.`;
+  }
+  return null;
+}

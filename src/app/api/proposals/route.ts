@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { INTAKE_FIELDS } from "@/lib/intake-fields";
+import { INTAKE_FIELDS, validateIntakeValue } from "@/lib/intake-fields";
 import { createClient } from "@/lib/supabase/server";
 
 // POST /api/proposals — Section 12: create a proposal from intake fields,
@@ -29,11 +29,12 @@ export async function POST(request: Request) {
   for (const field of INTAKE_FIELDS) {
     if (field.editable === false) continue;
     const value = record[field.key];
-    if (field.required && (typeof value !== "string" || !value.trim())) {
-      return NextResponse.json(
-        { error: `${field.label} is required.` },
-        { status: 400 }
-      );
+    if (typeof value !== "string" && value !== undefined) {
+      return NextResponse.json({ error: `${field.label} must be a string.` }, { status: 400 });
+    }
+    const validationError = validateIntakeValue(field, typeof value === "string" ? value : "");
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 });
     }
   }
 
